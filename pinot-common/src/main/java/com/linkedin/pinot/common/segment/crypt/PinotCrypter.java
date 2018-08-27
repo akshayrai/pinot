@@ -25,15 +25,17 @@ import java.net.URI;
 public interface PinotCrypter {
   /**
    * Encrypts data.
-   * @param uri location of data to be encrypted
+   * @param srcUri location of data to be encrypted
+   * @param dstUri location of encrypted data
    * @Exception throws an Exception if encrypt fails
    */
-  void encrypt(URI uri) throws Exception;
+  void encrypt(URI srcUri, URI dstUri) throws Exception;
 
   /**
    * Decrypts data.
-   * @param uri location of data to be decrypted
+   * @param srcUri location of data to be decrypted
+   * @param dstUri location of decrypted data
    * @Exception throws an Exception if decrypt fails
    */
-  void decrypt(URI uri) throws Exception;
+  void decrypt(URI srcUri, URI dstUri) throws Exception;
 }

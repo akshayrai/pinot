@@ -20,12 +20,12 @@ import java.net.URI;
 
 public class DefaultPinotCrypter implements PinotCrypter {
   @Override
-  public void encrypt(URI uri) throws Exception {
+  public void encrypt(URI srcUri, URI dstUri) throws Exception {
 
   }
 
   @Override
-  public void decrypt(URI uri) throws Exception {
+  public void decrypt(URI srcUri, URI dstUri) throws Exception {
 
   }
 }

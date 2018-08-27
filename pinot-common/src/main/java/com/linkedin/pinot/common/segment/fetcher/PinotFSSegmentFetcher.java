@@ -15,6 +15,8 @@
  */
 package com.linkedin.pinot.common.segment.fetcher;
 
+import com.linkedin.pinot.common.segment.crypt.PinotCrypter;
+import com.linkedin.pinot.common.segment.crypt.PinotCrypterFactory;
 import com.linkedin.pinot.filesystem.PinotFS;
 import com.linkedin.pinot.filesystem.PinotFSFactory;
 import java.io.File;
@@ -25,6 +27,7 @@ import org.apache.commons.configuration.Configuration;
 
 
 public class PinotFSSegmentFetcher implements SegmentFetcher {
+  private static final String DECRYPTED = "_decrypted";
   private PinotFS _pinotFS;
 
   @Override
@@ -36,9 +39,14 @@ public class PinotFSSegmentFetcher implements SegmentFetcher {
   public void fetchSegmentToLocal(String uriString, File tempFile) throws Exception {
     URI uri = new URI(uriString);
 
+    PinotCrypter pinotCrypter = PinotCrypterFactory.create();
+
     // TODO: move _pinotFS creation to init, however, it needs the right config passed in into init.
     _pinotFS = PinotFSFactory.create(uri.getScheme());
     _pinotFS.copyToLocalFile(uri, tempFile);
+    File decryptedFile = new File(tempFile.getParent(), tempFile.getName() + DECRYPTED);
+    pinotCrypter.decrypt(tempFile.toURI(), decryptedFile.toURI());
+    _pinotFS.move(decryptedFile.toURI(), tempFile.toURI());
   }
 
   /**
