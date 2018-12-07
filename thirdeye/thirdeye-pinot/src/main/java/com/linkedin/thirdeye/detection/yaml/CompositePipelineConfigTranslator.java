@@ -148,7 +148,6 @@ public class CompositePipelineConfigTranslator extends YamlDetectionConfigTransl
   private DatasetConfigDTO datasetConfig;
   private String metricUrn;
   private Map<String, Object> mergerProperties = new HashMap<>();
-  private Map<String, Collection<String>> filterMaps;
 
   public CompositePipelineConfigTranslator(Map<String, Object> yamlConfig, DataProvider provider) {
     super(yamlConfig, provider);

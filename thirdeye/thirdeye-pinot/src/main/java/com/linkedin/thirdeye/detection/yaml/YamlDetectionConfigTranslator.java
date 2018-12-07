@@ -3,7 +3,6 @@ package com.linkedin.thirdeye.detection.yaml;
 import com.google.common.base.Preconditions;
 import com.linkedin.thirdeye.datalayer.dto.DetectionConfigDTO;
 import com.linkedin.thirdeye.detection.DataProvider;
-import com.linkedin.thirdeye.detection.DetectionPipeline;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.commons.collections.MapUtils;
@@ -18,7 +17,6 @@ import org.slf4j.LoggerFactory;
 public abstract class YamlDetectionConfigTranslator {
   protected static final Logger LOG = LoggerFactory.getLogger(YamlDetectionConfigTranslator.class);
   private static final String PROP_NAME = "detectionName";
-
 
   protected Map<String, Object> yamlConfig;
   protected long startTime;

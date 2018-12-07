@@ -18,6 +18,8 @@ package com.linkedin.thirdeye.detection.annotation;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import com.linkedin.thirdeye.detection.alert.scheme.DetectionAlertScheme;
+import com.linkedin.thirdeye.detection.alert.suppress.DetectionAlertSuppressor;
 import com.linkedin.thirdeye.detection.spi.components.BaseComponent;
 import com.linkedin.thirdeye.detection.yaml.YamlDetectionConfigTranslator;
 import java.lang.annotation.Annotation;
@@ -42,6 +44,10 @@ public class DetectionRegistry {
   private static final Map<String, Tune> TUNE_MAP = new HashMap<>();
   // yaml pipeline type to yaml converter class name
   private static final Map<String, String> YAML_MAP = new HashMap<>();
+  // Alert Scheme type to Alert Scheme class name
+  private static final Map<String, String> ALERT_SCHEME_MAP = new HashMap<>();
+  // Alert Suppressor type to Alert Suppressor class name
+  private static final Map<String, String> ALERT_SUPPRESSOR_MAP = new HashMap<>();
   private static final Logger LOG = LoggerFactory.getLogger(DetectionRegistry.class);
   private static final String KEY_CLASS_NAME = "className";
   private static final String KEY_ANNOTATION = "annotation";
@@ -89,6 +95,26 @@ public class DetectionRegistry {
           }
         }
       }
+      // register alert schemes
+      Set<Class<? extends DetectionAlertScheme>> alertSchemeClasses =
+          reflections.getSubTypesOf(DetectionAlertScheme.class);
+      for (Class clazz : alertSchemeClasses) {
+        for (Annotation annotation : clazz.getAnnotations()) {
+          if (annotation instanceof Type) {
+            ALERT_SCHEME_MAP.put(((Type) annotation).type(), clazz.getName());
+          }
+        }
+      }
+      // register alert suppressors
+      Set<Class<? extends DetectionAlertSuppressor>> alertSuppressorClasses =
+          reflections.getSubTypesOf(DetectionAlertSuppressor.class);
+      for (Class clazz : alertSuppressorClasses) {
+        for (Annotation annotation : clazz.getAnnotations()) {
+          if (annotation instanceof Type) {
+            ALERT_SUPPRESSOR_MAP.put(((Type) annotation).type(), clazz.getName());
+          }
+        }
+      }
     } catch (Exception e) {
       LOG.warn("initialize detection registry error", e);
     }
@@ -113,6 +139,22 @@ public class DetectionRegistry {
   public String lookupTunable(String className) {
     Preconditions.checkArgument(TUNE_MAP.containsKey(className), className + " not found in registry");
     return this.lookup(TUNE_MAP.get(className).tunable());
+  }
+
+  /**
+   * Look up the {@link #ALERT_SCHEME_MAP} for the Alert scheme class name from the type
+   */
+  public String lookupAlertSchemes(String schemeType) {
+    Preconditions.checkArgument(ALERT_SCHEME_MAP.containsKey(schemeType), schemeType + " not found in registry");
+    return this.lookup(ALERT_SCHEME_MAP.get(schemeType));
+  }
+
+  /**
+   * Look up the {@link #ALERT_SUPPRESSOR_MAP} for the Alert suppressor class name from the type
+   */
+  public String lookupAlertSuppressors(String suppressorType) {
+    Preconditions.checkArgument(ALERT_SUPPRESSOR_MAP.containsKey(suppressorType), suppressorType + " not found in registry");
+    return this.lookup(ALERT_SUPPRESSOR_MAP.get(suppressorType));
   }
 
   /**

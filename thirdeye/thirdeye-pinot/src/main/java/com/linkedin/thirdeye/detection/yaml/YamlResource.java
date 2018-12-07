@@ -1,7 +1,6 @@
 package com.linkedin.thirdeye.detection.yaml;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.linkedin.thirdeye.datalayer.bao.DatasetConfigManager;
 import com.linkedin.thirdeye.datalayer.bao.DetectionAlertConfigManager;
@@ -22,6 +21,7 @@ import com.linkedin.thirdeye.detection.ConfigUtils;
 import com.linkedin.thirdeye.detection.DataProvider;
 import com.linkedin.thirdeye.detection.DefaultDataProvider;
 import com.linkedin.thirdeye.detection.DetectionPipelineLoader;
+import com.linkedin.thirdeye.detection.validators.DetectionAlertConfigValidator;
 import com.wordnik.swagger.annotations.ApiParam;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,6 +30,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -39,6 +40,7 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import org.apache.commons.collections.MapUtils;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
@@ -48,9 +50,8 @@ import org.yaml.snakeyaml.Yaml;
 public class YamlResource {
   protected static final Logger LOG = LoggerFactory.getLogger(YamlResource.class);
 
-  private static final String PROP_NAME = "detectionName";
-  private static final String PROP_TYPE = "type";
-  private static final String PROP_DETECTION_CONFIG_ID = "detectionConfigIds";
+  public static final String PROP_SUBS_GROUP_NAME = "subscriptionGroupName";
+  public static final String PROP_DETECTION_NAME = "detectionName";
 
   private static final Yaml YAML = new Yaml();
 
@@ -64,8 +65,11 @@ public class YamlResource {
   private final EventManager eventDAO;
   private final MergedAnomalyResultManager anomalyDAO;
   private final DetectionPipelineLoader loader;
+  private final DetectionAlertConfigValidator alertValidator;
 
   public YamlResource() {
+    this.alertValidator = new DetectionAlertConfigValidator();
+
     this.detectionConfigDAO = DAORegistry.getInstance().getDetectionConfigManager();
     this.detectionAlertConfigDAO = DAORegistry.getInstance().getDetectionAlertConfigManager();
     this.translatorLoader = new YamlDetectionTranslatorLoader();
@@ -97,15 +101,17 @@ public class YamlResource {
   @Consumes(MediaType.TEXT_PLAIN)
   public Response setUpDetectionPipeline(@ApiParam("payload") String payload,
       @QueryParam("startTime") long startTime, @QueryParam("endTime") long endTime) throws Exception {
-    if (Strings.isNullOrEmpty(payload)) {
-      throw new IllegalArgumentException("Empty Payload");
+    if (StringUtils.isEmpty(payload)) {
+      return Response.serverError().entity("Payload cannot be blank. No YAML detection config in request.").build();
     }
-    Map<String, Object> yamlConfig = (Map<String, Object>) this.YAML.load(payload);
 
-    Preconditions.checkArgument(yamlConfig.containsKey(PROP_NAME), "missing " + PROP_NAME);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> yamlConfig = (Map<String, Object>) YAML.load(payload);
+
+    Preconditions.checkArgument(yamlConfig.containsKey(PROP_DETECTION_NAME), "missing " + PROP_DETECTION_NAME);
     // retrieve id if detection config already exists
     List<DetectionConfigDTO> detectionConfigDTOs =
-        this.detectionConfigDAO.findByPredicate(Predicate.EQ("name", MapUtils.getString(yamlConfig, PROP_NAME)));
+        this.detectionConfigDAO.findByPredicate(Predicate.EQ("name", MapUtils.getString(yamlConfig, PROP_DETECTION_NAME)));
     DetectionConfigDTO existingDetectionConfig = null;
     if (!detectionConfigDTOs.isEmpty()) {
       existingDetectionConfig = detectionConfigDTOs.get(0);
@@ -123,56 +129,108 @@ public class YamlResource {
     Long detectionConfigId = this.detectionConfigDAO.save(detectionConfig);
     Preconditions.checkNotNull(detectionConfigId, "Save detection config failed");
 
-    // optionally set up an alerter for the detection pipeline
-    if (yamlConfig.containsKey("alert")) {
-      Map<String, Object> alertYaml = MapUtils.getMap(yamlConfig, "alert");
-      DetectionAlertConfigDTO alertConfigDTO = getDetectionAlertConfig(alertYaml, detectionConfigId);
-      Long detectionAlertConfigId = this.detectionAlertConfigDAO.save(alertConfigDTO);
-      Preconditions.checkNotNull(detectionAlertConfigId, "Save detection alerter config failed");
-    }
-
     return Response.ok(detectionConfig).build();
   }
 
-  /**
-   translate alert yaml to detection alert config
-   */
-  private DetectionAlertConfigDTO getDetectionAlertConfig(Map<String, Object> alertYaml, Long detectionConfigId) {
-    Preconditions.checkArgument(alertYaml.containsKey(PROP_NAME), "alert name missing");
-
-    // try to retrieve existing alert config
-    List<DetectionAlertConfigDTO> existingAlertConfigDTOs =
-        this.detectionAlertConfigDAO.findByPredicate(Predicate.EQ("name", MapUtils.getString(alertYaml, PROP_NAME)));
-
-    if (existingAlertConfigDTOs.isEmpty()) {
-      // if alert does not exist, create a new alerter
-      return this.alertConfigTranslator.generateDetectionAlertConfig(alertYaml, Collections.singletonList(detectionConfigId), new HashMap<>());
-    } else {
-      // get existing detection alerter
-      DetectionAlertConfigDTO existingAlertConfigDTO = existingAlertConfigDTOs.get(0);
-      if (alertYaml.containsKey(PROP_TYPE)) {
-        // if alert Yaml contains alert configuration, update existing alert config properties
-        Set<Long> detectionConfigIds =
-            new HashSet(ConfigUtils.getLongs(existingAlertConfigDTO.getProperties().get(PROP_DETECTION_CONFIG_ID)));
-        detectionConfigIds.add(detectionConfigId);
-        DetectionAlertConfigDTO alertConfigDTO =
-            this.alertConfigTranslator.generateDetectionAlertConfig(alertYaml, detectionConfigIds, existingAlertConfigDTO.getVectorClocks());
-        alertConfigDTO.setId(existingAlertConfigDTO.getId());
-        alertConfigDTO.setHighWaterMark(existingAlertConfigDTO.getHighWaterMark());
-        return alertConfigDTO;
-      } else {
-        // Yaml does not contains alert config properties, add the detection pipeline to a existing alerter
-        Map<Long, Long> existingVectorClocks = existingAlertConfigDTO.getVectorClocks();
-        if (!existingVectorClocks.containsKey(detectionConfigId)) {
-          existingVectorClocks.put(detectionConfigId, 0L);
-        }
-        Set<Long> detectionConfigIds =
-            new HashSet(ConfigUtils.getList(existingAlertConfigDTO.getProperties().get(PROP_DETECTION_CONFIG_ID)));
-        detectionConfigIds.add(detectionConfigId);
-        existingAlertConfigDTO.getProperties().put(PROP_DETECTION_CONFIG_ID, detectionConfigIds);
-        return existingAlertConfigDTO;
-      }
+  @POST
+  @Path("/create-detection-alert-config")
+  @Produces(MediaType.APPLICATION_JSON)
+  @Consumes(MediaType.TEXT_PLAIN)
+  @SuppressWarnings("unchecked")
+  public Response createDetectionAlertConfig(@ApiParam("payload") String yamlAlertConfig) {
+    Map<String, String> responseMessage = new HashMap<>();
+    if (!alertValidator.validateBasicAlertYAML(yamlAlertConfig, responseMessage)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity(responseMessage).build();
     }
+
+    Long detectionAlertConfigId;
+    try {
+      TreeMap<String, Object> newAlertConfig = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+      newAlertConfig.putAll((Map<String, Object>) YAML.load(yamlAlertConfig));
+
+      // Check if a subscription group with the name already exists
+      List<DetectionAlertConfigDTO> alertConfigDTOS = this.detectionAlertConfigDAO
+          .findByPredicate(Predicate.EQ("name", MapUtils.getString(newAlertConfig, PROP_SUBS_GROUP_NAME)));
+      if (!alertConfigDTOS.isEmpty()) {
+        responseMessage.put("message", "Subscription group name is already taken. Please use a different name.");
+        return Response.status(Response.Status.BAD_REQUEST).entity(responseMessage).build();
+      }
+
+      // Translate config from YAML to detection alert config (JSON)
+      DetectionAlertConfigDTO alertConfig = this.alertConfigTranslator.generateDetectionAlertConfig(newAlertConfig);
+      alertConfig.setYaml(yamlAlertConfig);
+
+      // Check if all the required fields are set
+      if (!alertValidator.validateAlertConfig(alertConfig, responseMessage)) {
+        return Response.status(Response.Status.BAD_REQUEST).entity(responseMessage).build();
+      }
+
+      detectionAlertConfigId = this.detectionAlertConfigDAO.save(alertConfig);
+      if (detectionAlertConfigId == null) {
+        responseMessage.put("message", "Failed to save the detection alert config.");
+        responseMessage.put("more-info", "Check for potential DB issues. YAML alert config = " + yamlAlertConfig);
+        return Response.serverError().entity(responseMessage).build();
+      }
+    } catch (Exception e) {
+      responseMessage.put("message", "Failed to save the detection alert config.");
+      responseMessage.put("more-info", "Exception = " + e);
+      return Response.serverError().entity(responseMessage).build();
+    }
+
+    responseMessage.put("message", "The YAML alert config was saved successfully.");
+    responseMessage.put("more-info", "Record saved with id " + detectionAlertConfigId);
+    return Response.ok().entity(responseMessage).build();
+  }
+
+  @POST
+  @Path("/update-detection-alert-config")
+  @Produces(MediaType.APPLICATION_JSON)
+  @Consumes(MediaType.TEXT_PLAIN)
+  @SuppressWarnings("unchecked")
+  public Response updateDetectionAlertConfig(@ApiParam("payload") String yamlAlertConfig) throws Exception {
+    Map<String, String> responseMessage = new HashMap<>();
+    if (!alertValidator.validateBasicAlertYAML(yamlAlertConfig, responseMessage)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity(responseMessage).build();
+    }
+
+    try {
+      TreeMap<String, Object> newAlertConfigMap = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+      newAlertConfigMap.putAll((Map<String, Object>) YAML.load(yamlAlertConfig));
+
+      // Search for the detection alert config's reference in the db
+      String subsGroupName = MapUtils.getString(newAlertConfigMap, PROP_SUBS_GROUP_NAME);
+      List<DetectionAlertConfigDTO> alertConfigDTOS = this.detectionAlertConfigDAO
+          .findByPredicate(Predicate.EQ("name", subsGroupName));
+      if (alertConfigDTOS.isEmpty()) {
+        responseMessage.put("message", "Cannot find subscription group with the name " + subsGroupName);
+        return Response.status(Response.Status.BAD_REQUEST).entity(responseMessage).build();
+      }
+      DetectionAlertConfigDTO oldAlertConfig = alertConfigDTOS.get(0);
+      DetectionAlertConfigDTO newAlertConfig = this.alertConfigTranslator.generateDetectionAlertConfig(newAlertConfigMap);
+
+      // Translate config from YAML to detection alert config (JSON)
+      DetectionAlertConfigDTO updatedAlertConfig = this.alertConfigTranslator.updateDetectionAlertConfig(oldAlertConfig, newAlertConfig);
+      updatedAlertConfig.setYaml(yamlAlertConfig);
+
+      // Check for fields which shouldn't be updated by user & if all required fields are set
+      if (!alertValidator.validateUpdatedAlertConfig(updatedAlertConfig, oldAlertConfig, responseMessage)) {
+        return Response.status(Response.Status.BAD_REQUEST).entity(responseMessage).build();
+      }
+
+      int detectionAlertConfigId = this.detectionAlertConfigDAO.update(updatedAlertConfig);
+      if (detectionAlertConfigId <= 0) {
+        responseMessage.put("message", "Failed to update the detection alert config.");
+        responseMessage.put("more-info", "Zero records updated. Check for DB issues. YAML config = " + yamlAlertConfig);
+        return Response.serverError().entity(responseMessage).build();
+      }
+    } catch (Exception e) {
+      responseMessage.put("message", "Failed to update the detection alert config.");
+      responseMessage.put("more-info", "Exception = " + e);
+      return Response.serverError().entity(responseMessage).build();
+    }
+
+    responseMessage.put("message", "The YAML alert config was updated successfully.");
+    return Response.ok().entity(responseMessage).build();
   }
 
   /**
