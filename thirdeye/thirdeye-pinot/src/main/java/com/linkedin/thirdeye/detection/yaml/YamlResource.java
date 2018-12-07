@@ -58,7 +58,6 @@ public class YamlResource {
   private final DetectionConfigManager detectionConfigDAO;
   private final DetectionAlertConfigManager detectionAlertConfigDAO;
   private final YamlDetectionTranslatorLoader translatorLoader;
-  private final YamlDetectionAlertConfigTranslator alertConfigTranslator;
   private final DataProvider provider;
   private final MetricConfigManager metricDAO;
   private final DatasetConfigManager datasetDAO;
@@ -73,7 +72,6 @@ public class YamlResource {
     this.detectionConfigDAO = DAORegistry.getInstance().getDetectionConfigManager();
     this.detectionAlertConfigDAO = DAORegistry.getInstance().getDetectionAlertConfigManager();
     this.translatorLoader = new YamlDetectionTranslatorLoader();
-    this.alertConfigTranslator = new YamlDetectionAlertConfigTranslator();
     this.metricDAO = DAORegistry.getInstance().getMetricConfigDAO();
     this.datasetDAO = DAORegistry.getInstance().getDatasetConfigDAO();
     this.eventDAO = DAORegistry.getInstance().getEventDAO();
@@ -157,7 +155,8 @@ public class YamlResource {
       }
 
       // Translate config from YAML to detection alert config (JSON)
-      DetectionAlertConfigDTO alertConfig = this.alertConfigTranslator.generateDetectionAlertConfig(newAlertConfig);
+      YamlDetectionAlertConfigTranslator alertConfigTranslator = new YamlDetectionAlertConfigTranslator(newAlertConfig);
+      DetectionAlertConfigDTO alertConfig = alertConfigTranslator.translate();
       alertConfig.setYaml(yamlAlertConfig);
 
       // Check if all the required fields are set
@@ -206,10 +205,12 @@ public class YamlResource {
         return Response.status(Response.Status.BAD_REQUEST).entity(responseMessage).build();
       }
       DetectionAlertConfigDTO oldAlertConfig = alertConfigDTOS.get(0);
-      DetectionAlertConfigDTO newAlertConfig = this.alertConfigTranslator.generateDetectionAlertConfig(newAlertConfigMap);
+
+      YamlDetectionAlertConfigTranslator alertConfigTranslator = new YamlDetectionAlertConfigTranslator(newAlertConfigMap);
+      DetectionAlertConfigDTO newAlertConfig = alertConfigTranslator.translate();
 
       // Translate config from YAML to detection alert config (JSON)
-      DetectionAlertConfigDTO updatedAlertConfig = this.alertConfigTranslator.updateDetectionAlertConfig(oldAlertConfig, newAlertConfig);
+      DetectionAlertConfigDTO updatedAlertConfig = updateDetectionAlertConfig(oldAlertConfig, newAlertConfig);
       updatedAlertConfig.setYaml(yamlAlertConfig);
 
       // Check for fields which shouldn't be updated by user & if all required fields are set
@@ -253,7 +254,7 @@ public class YamlResource {
     for (DetectionConfigDTO detectionConfigDTO : detectionConfigDTOs) {
       if (detectionConfigDTO.getYaml() != null) {
         Map<String, Object> yamlObject = new HashMap<>();
-        yamlObject.putAll((Map<? extends String, ?>) this.YAML.load(detectionConfigDTO.getYaml()));
+        yamlObject.putAll((Map<? extends String, ?>) YAML.load(detectionConfigDTO.getYaml()));
         yamlObject.put("id", detectionConfigDTO.getId());
         yamlObject.put("isActive", detectionConfigDTO.isActive());
         yamlObject.put("createdBy", detectionConfigDTO.getCreatedBy());
@@ -261,5 +262,51 @@ public class YamlResource {
       }
     }
     return yamlObjects;
+  }
+  
+  @GET
+  @Path("/alert/list")
+  @Produces(MediaType.APPLICATION_JSON)
+  public List<Object> listAlertYamls(@QueryParam("id") Long id){
+    List<DetectionAlertConfigDTO> detectionAlertConfigDTOs;
+    if (id == null) {
+      detectionAlertConfigDTOs = this.detectionAlertConfigDAO.findAll();
+    } else {
+      detectionAlertConfigDTOs = Collections.singletonList(this.detectionAlertConfigDAO.findById(id));
+    }
+
+    List<Object> yamlObjects = new ArrayList<>();
+    for (DetectionAlertConfigDTO detectionAlertConfigDTO : detectionAlertConfigDTOs) {
+      if (detectionAlertConfigDTO.getYaml() != null) {
+        Map<String, Object> yamlObject = new HashMap<>();
+        yamlObject.putAll((Map<? extends String, ?>) YAML.load(detectionAlertConfigDTO.getYaml()));
+        yamlObject.put("id", detectionAlertConfigDTO.getId());
+        yamlObjects.add(yamlObject);
+      }
+    }
+    return yamlObjects;
+  }
+
+  /**
+   * Update the existing {@code oldAlertConfig} with the new {@code newAlertConfig}
+   *
+   * Update all the fields except the vector clocks and high watermark. The clocks and watermarks
+   * are managed by the platform. They shouldn't be reset by the user.
+   */
+  public DetectionAlertConfigDTO updateDetectionAlertConfig(DetectionAlertConfigDTO oldAlertConfig,
+      DetectionAlertConfigDTO newAlertConfig) {
+    oldAlertConfig.setName(newAlertConfig.getName());
+    oldAlertConfig.setCronExpression(newAlertConfig.getCronExpression());
+    oldAlertConfig.setApplication(newAlertConfig.getApplication());
+    oldAlertConfig.setFrom(newAlertConfig.getFrom());
+    oldAlertConfig.setSubjectType(newAlertConfig.getSubjectType());
+    oldAlertConfig.setReferenceLinks(newAlertConfig.getReferenceLinks());
+    oldAlertConfig.setActive(newAlertConfig.isActive());
+    oldAlertConfig.setAlertSchemes(newAlertConfig.getAlertSchemes());
+    oldAlertConfig.setAlertSuppressors(newAlertConfig.getAlertSuppressors());
+    oldAlertConfig.setOnlyFetchLegacyAnomalies(newAlertConfig.isOnlyFetchLegacyAnomalies());
+    oldAlertConfig.setProperties(newAlertConfig.getProperties());
+
+    return oldAlertConfig;
   }
 }

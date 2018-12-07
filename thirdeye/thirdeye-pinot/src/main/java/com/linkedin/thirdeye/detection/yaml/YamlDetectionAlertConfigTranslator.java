@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import org.apache.commons.collections.MapUtils;
 
 
@@ -37,10 +38,16 @@ public class YamlDetectionAlertConfigTranslator {
   private static final String PROP_DIMENSION = "dimension";
   private static final String PROP_DIMENSION_RECIPIENTS = "dimensionRecipients";
 
+  private Map<String,Object> yamlAlertConfig;
+
   private static final String DEFAULT_CRON_SCHEDULE = "0 0/5 * * * ? *"; // Every 5 min
   private static final DetectionRegistry DETECTION_REGISTRY = DetectionRegistry.getInstance();
   private static final Set<String> PROPERTY_KEYS = new HashSet<>(
       Arrays.asList(PROP_DETECTION_CONFIG_IDS, PROP_RECIPIENTS, PROP_DIMENSION, PROP_DIMENSION_RECIPIENTS));
+
+  public YamlDetectionAlertConfigTranslator(Map<String,Object> newAlertConfig) {
+    this.yamlAlertConfig = newAlertConfig;
+  }
 
   private Map<String, Object> buildAlerterProperties(Map<String, Object> alertYamlConfigs) {
     Map<String, Object> properties = new HashMap<>();
@@ -111,7 +118,7 @@ public class YamlDetectionAlertConfigTranslator {
    * Generates the {@link DetectionAlertConfigDTO} from the YAML Alert Map
    */
   @SuppressWarnings("unchecked")
-  public DetectionAlertConfigDTO generateDetectionAlertConfig(Map<String,Object> yamlAlertConfig) {
+  public DetectionAlertConfigDTO translate() {
     DetectionAlertConfigDTO alertConfigDTO = new DetectionAlertConfigDTO();
 
     alertConfigDTO.setName(MapUtils.getString(yamlAlertConfig, PROP_SUBS_GROUP_NAME));
@@ -141,28 +148,5 @@ public class YamlDetectionAlertConfigTranslator {
     alertConfigDTO.setVectorClocks(vectorClocks);
 
     return alertConfigDTO;
-  }
-
-  /**
-   * Update the existing {@code oldAlertConfig} with the new {@code newAlertConfig}
-   *
-   * Update all the fields except the vector clocks and high watermark. The clocks and watermarks
-   * are managed by the platform. They shouldn't be reset by the user.
-   */
-  public DetectionAlertConfigDTO updateDetectionAlertConfig(DetectionAlertConfigDTO oldAlertConfig,
-      DetectionAlertConfigDTO newAlertConfig) {
-    oldAlertConfig.setName(newAlertConfig.getName());
-    oldAlertConfig.setCronExpression(newAlertConfig.getCronExpression());
-    oldAlertConfig.setApplication(newAlertConfig.getApplication());
-    oldAlertConfig.setFrom(newAlertConfig.getFrom());
-    oldAlertConfig.setSubjectType(newAlertConfig.getSubjectType());
-    oldAlertConfig.setReferenceLinks(newAlertConfig.getReferenceLinks());
-    oldAlertConfig.setActive(newAlertConfig.isActive());
-    oldAlertConfig.setAlertSchemes(newAlertConfig.getAlertSchemes());
-    oldAlertConfig.setAlertSuppressors(newAlertConfig.getAlertSuppressors());
-    oldAlertConfig.setOnlyFetchLegacyAnomalies(newAlertConfig.isOnlyFetchLegacyAnomalies());
-    oldAlertConfig.setProperties(newAlertConfig.getProperties());
-
-    return oldAlertConfig;
   }
 }
