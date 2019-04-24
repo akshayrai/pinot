@@ -20,7 +20,12 @@
 package org.apache.pinot.thirdeye.detection.yaml;
 
 import com.google.common.base.Preconditions;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import org.apache.pinot.thirdeye.datalayer.dto.DetectionConfigDTO;
+import org.apache.pinot.thirdeye.detection.ConfigUtils;
 import org.apache.pinot.thirdeye.detection.DataProvider;
 import java.util.HashMap;
 import java.util.Map;
@@ -40,6 +45,7 @@ public abstract class YamlDetectionConfigTranslator {
   private static final String PROP_NAME = "detectionName";
   private static final String PROP_FILTER = "filter";
   private static final String PROP_DESC_NAME = "description";
+  private static final String PROP_OWNERS = "owners";
   private static final String PROP_ACTIVE = "active";
 
   protected Map<String, Object> yamlConfig;
@@ -82,6 +88,7 @@ public abstract class YamlDetectionConfigTranslator {
     DetectionConfigDTO config = new DetectionConfigDTO();
     config.setName(MapUtils.getString(yamlConfig, PROP_NAME));
     config.setDescription(MapUtils.getString(yamlConfig, PROP_DESC_NAME));
+    config.setOwners(filterOwners(ConfigUtils.getList(yamlConfig.get(PROP_OWNERS))));
     config.setLastTimestamp(System.currentTimeMillis());
     YamlTranslationResult translationResult = translateYaml();
     Preconditions.checkArgument(!translationResult.getProperties().isEmpty(), "Empty detection property");
@@ -102,6 +109,16 @@ public abstract class YamlDetectionConfigTranslator {
     }
 
     return config;
+  }
+
+  private List<String> filterOwners(List<String> configuredOwners) {
+    List<String> owners = new ArrayList<>();
+    for (String configuredOwner : configuredOwners) {
+      // TODO: check if configured owner is valid
+      owners.add(configuredOwner.trim());
+    }
+
+    return owners;
   }
 
   /**
