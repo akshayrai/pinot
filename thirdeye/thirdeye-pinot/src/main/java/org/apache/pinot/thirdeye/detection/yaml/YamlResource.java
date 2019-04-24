@@ -25,6 +25,7 @@ import com.google.common.collect.ImmutableMap;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
 import com.wordnik.swagger.annotations.ApiParam;
+import io.dropwizard.auth.Auth;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -34,9 +35,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.security.PermitAll;
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
+import javax.ws.rs.NotAuthorizedException;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -49,6 +52,7 @@ import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.pinot.thirdeye.anomaly.task.TaskConstants;
 import org.apache.pinot.thirdeye.api.Constants;
+import org.apache.pinot.thirdeye.auth.ThirdEyePrincipal;
 import org.apache.pinot.thirdeye.dataframe.util.MetricSlice;
 import org.apache.pinot.thirdeye.datalayer.bao.DatasetConfigManager;
 import org.apache.pinot.thirdeye.datalayer.bao.DetectionAlertConfigManager;
@@ -347,7 +351,7 @@ public class YamlResource {
     return Response.ok().entity(responseMessage).build();
   }
 
-  void updateDetectionPipeline(long detectionID, String yamlDetectionConfig, long startTime, long endTime)
+  private void updateDetectionPipeline(long detectionID, String yamlDetectionConfig, long startTime, long endTime)
       throws IllegalArgumentException {
     DetectionConfigDTO existingDetectionConfig = this.detectionConfigDAO.findById(detectionID);
     DetectionConfigDTO detectionConfig;
@@ -388,24 +392,35 @@ public class YamlResource {
   @Path("/{id}")
   @Produces(MediaType.APPLICATION_JSON)
   @Consumes(MediaType.TEXT_PLAIN)
+  @PermitAll
   @ApiOperation("Edit a detection pipeline using a YAML config")
-  public Response updateDetectionPipelineApi(
+  public Response updateDetectionPipelineApi(@Auth ThirdEyePrincipal user,
       @ApiParam("yaml config") String payload,
       @ApiParam("the detection config id to edit") @PathParam("id") long id,
       @ApiParam("tuning window start time for tunable components")  @QueryParam("startTime") long startTime,
       @ApiParam("tuning window end time for tunable components") @QueryParam("endTime") long endTime) {
     Map<String, String> responseMessage = new HashMap<>();
     try {
+      DetectionConfigDTO existingDetectionConfig = this.detectionConfigDAO.findById(id);
+      LOG.info("Auth User " + user.getName());
+      //if (sc.getUserPrincipal() == null) {
+      //  throw new NotAuthorizedException("Cannot fetch the principal");
+      //}
+      //LOG.info("User " + sc.getUserPrincipal().getName() + " calling api.");
+      //if (!existingDetectionConfig.getOwners().contains(sc.getUserPrincipal().getName())) {
+      //  throw new NotAuthorizedException("User " + sc.getUserPrincipal().getName() + " not authorized");
+      //}
       updateDetectionPipeline(id, payload, startTime, endTime);
     } catch (IllegalArgumentException e) {
       LOG.warn("Validation error while creating detection pipeline with payload " + payload, e);
       responseMessage.put("message", "Validation Error! " + e.getMessage());
       return Response.status(Response.Status.BAD_REQUEST).entity(responseMessage).build();
-    } catch (Exception e) {
-      LOG.error("Error creating detection pipeline with payload " + payload, e);
+    } catch(NotAuthorizedException e) {
+      //throw new WebApplicationException(e.getMessage(), e, Response.Status.UNAUTHORIZED);
+      //LOG.warn("Unable to authorize use to access " + payload, e);
       responseMessage.put("message", "Failed to create the subscription group. Reach out to the ThirdEye team.");
       responseMessage.put("more-info", "Error = " + e.getMessage());
-      return Response.serverError().entity(responseMessage).build();
+      return Response.status(Response.Status.UNAUTHORIZED).entity(responseMessage).build();
     }
 
     LOG.info("Detection Pipeline " + id + " updated successfully");

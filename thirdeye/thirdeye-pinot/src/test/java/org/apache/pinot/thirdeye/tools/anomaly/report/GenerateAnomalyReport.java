@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.common.base.MoreObjects;
+import io.dropwizard.configuration.YamlConfigurationFactory;
 import org.apache.pinot.thirdeye.anomaly.SmtpConfiguration;
 import org.apache.pinot.thirdeye.anomaly.ThirdEyeAnomalyConfiguration;
 import org.apache.pinot.thirdeye.anomaly.alert.util.EmailHelper;
@@ -234,7 +235,7 @@ public class GenerateAnomalyReport {
     }
 
     ConfigurationFactory<ThirdEyeAnomalyConfiguration> factory =
-        new ConfigurationFactory<>(ThirdEyeAnomalyConfiguration.class,
+        new YamlConfigurationFactory<>(ThirdEyeAnomalyConfiguration.class,
             Validation.buildDefaultValidatorFactory().getValidator(), Jackson.newObjectMapper(),
             "");
     ThirdEyeAnomalyConfiguration detectorConfig = factory.build(detectorConfigFile);

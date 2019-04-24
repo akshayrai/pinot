@@ -17,8 +17,6 @@
  * under the License.
  */
 
-
-
 package org.apache.pinot.thirdeye.util;
 
 import com.google.common.base.Preconditions;
@@ -29,6 +27,7 @@ import com.google.common.cache.RemovalListener;
 import com.google.common.cache.RemovalNotification;
 import com.google.common.cache.Weigher;
 import com.google.common.collect.HashMultimap;
+import io.dropwizard.configuration.YamlConfigurationFactory;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.common.data.TimeGranularitySpec.TimeFormat;
@@ -36,7 +35,6 @@ import org.apache.pinot.thirdeye.common.dimension.DimensionMap;
 
 import org.apache.pinot.thirdeye.dashboard.ThirdEyeDashboardConfiguration;
 import org.apache.pinot.thirdeye.datalayer.util.DaoProviderUtil;
-import io.dropwizard.configuration.ConfigurationFactory;
 import io.dropwizard.jackson.Jackson;
 import java.io.File;
 import java.io.IOException;
@@ -518,8 +516,8 @@ public abstract class ThirdEyeUtils {
     try {
       String dashboardConfigFilePath = thirdEyeConfigDir + "/dashboard.yml";
       File configFile = new File(dashboardConfigFilePath);
-      ConfigurationFactory<ThirdEyeDashboardConfiguration> factory =
-          new ConfigurationFactory<>(ThirdEyeDashboardConfiguration.class,
+      YamlConfigurationFactory<ThirdEyeDashboardConfiguration> factory =
+          new YamlConfigurationFactory<>(ThirdEyeDashboardConfiguration.class,
               Validation.buildDefaultValidatorFactory().getValidator(), Jackson.newObjectMapper(), "");
       config = factory.build(configFile);
       config.setRootDir(thirdEyeConfigDir);

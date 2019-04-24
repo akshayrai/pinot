@@ -19,7 +19,10 @@
 
 package org.apache.pinot.thirdeye.detection.yaml.translator;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.pinot.thirdeye.datalayer.dto.DetectionConfigDTO;
+import org.apache.pinot.thirdeye.detection.ConfigUtils;
 import org.apache.pinot.thirdeye.detection.DataProvider;
 import java.util.Map;
 import org.apache.commons.collections.MapUtils;
@@ -39,6 +42,7 @@ public abstract class YamlDetectionConfigTranslator extends ConfigTranslator<Det
   private static final String PROP_NAME = "detectionName";
   private static final String PROP_DESC_NAME = "description";
   private static final String PROP_ACTIVE = "active";
+  private static final String PROP_OWNERS = "owners";
 
   protected DataProvider dataProvider;
 
@@ -55,6 +59,7 @@ public abstract class YamlDetectionConfigTranslator extends ConfigTranslator<Det
     config.setName(MapUtils.getString(yamlConfig, PROP_NAME));
     config.setDescription(MapUtils.getString(yamlConfig, PROP_DESC_NAME));
     config.setLastTimestamp(System.currentTimeMillis());
+    config.setOwners(filterOwners(ConfigUtils.getList(yamlConfig.get(PROP_OWNERS))));
 
     config.setProperties(properties);
     config.setComponentSpecs(components);
@@ -67,5 +72,15 @@ public abstract class YamlDetectionConfigTranslator extends ConfigTranslator<Det
     config.setYaml(new Yaml(options).dump(yamlConfig));
 
     return config;
+  }
+
+  private List<String> filterOwners(List<String> configuredOwners) {
+    List<String> owners = new ArrayList<>();
+    for (String configuredOwner : configuredOwners) {
+      // TODO: check if configured owner is valid
+      owners.add(configuredOwner.trim());
+    }
+
+    return owners;
   }
 }

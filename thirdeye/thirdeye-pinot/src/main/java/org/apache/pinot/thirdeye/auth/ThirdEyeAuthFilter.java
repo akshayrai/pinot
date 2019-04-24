@@ -19,6 +19,8 @@
 
 package org.apache.pinot.thirdeye.auth;
 
+import io.dropwizard.auth.AuthenticationException;
+import java.util.Optional;
 import org.apache.pinot.thirdeye.dashboard.resources.v2.AuthResource;
 import org.apache.pinot.thirdeye.datalayer.bao.SessionManager;
 import org.apache.pinot.thirdeye.datalayer.dto.SessionDTO;
@@ -99,6 +101,18 @@ public class ThirdEyeAuthFilter extends AuthFilter<Credentials, ThirdEyePrincipa
     }
 
     setCurrentPrincipal(principal);
+
+/*    try {
+      Optional<ThirdEyePrincipal> authUserResult = authenticator.authenticate(new Credentials());
+
+      if(!authUserResult.isPresent()) {
+        throw new WebApplicationException(Response.Status.UNAUTHORIZED);
+      } else {
+        // Success
+      }
+    } catch (AuthenticationException e) {
+      throw new WebApplicationException(Response.Status.UNAUTHORIZED);
+    }*/
   }
 
   private boolean isAuthenticated(ContainerRequestContext containerRequestContext, ThirdEyePrincipal principal) {

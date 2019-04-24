@@ -20,6 +20,13 @@
 package org.apache.pinot.thirdeye.datalayer.bao.jdbc;
 
 import com.google.inject.Singleton;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import javax.naming.AuthenticationException;
+import javax.ws.rs.NotAuthorizedException;
+import org.apache.pinot.thirdeye.auth.ThirdEyeAuthFilter;
+import org.apache.pinot.thirdeye.auth.ThirdEyePrincipal;
 import org.apache.pinot.thirdeye.datalayer.bao.DetectionConfigManager;
 import org.apache.pinot.thirdeye.datalayer.dto.DetectionConfigDTO;
 import org.apache.pinot.thirdeye.datalayer.dto.MergedAnomalyResultDTO;
@@ -36,6 +43,16 @@ public class DetectionConfigManagerImpl extends AbstractManagerImpl<DetectionCon
 
   @Override
   public int update(DetectionConfigDTO detectionConfigDTO) {
+/*    ThirdEyePrincipal principal = ThirdEyeAuthFilter.getCurrentPrincipal();
+    if (principal == null) {
+      throw new NotAuthorizedException("Unable to fetch the principal for the user");
+    }
+
+    List<String> owners = detectionConfigDTO.getOwners();
+    if (owners != null && !owners.contains(principal.getName())) {
+      throw new NotAuthorizedException("Permission denied. User not authorized to update the config.");
+    }*/
+
     if (detectionConfigDTO.getId() == null) {
       Long id = save(detectionConfigDTO);
       if (id > 0) {
@@ -56,6 +73,19 @@ public class DetectionConfigManagerImpl extends AbstractManagerImpl<DetectionCon
       update(detectionConfigDTO);
       return detectionConfigDTO.getId();
     }
+
+/*    ThirdEyePrincipal principal = ThirdEyeAuthFilter.getCurrentPrincipal();
+    if (principal == null) {
+      throw new NotAuthorizedException("Unable to fetch the principal for the user");
+    }
+    List<String> owners = detectionConfigDTO.getOwners();
+    if (owners == null) {
+      owners = new ArrayList<>();
+    }
+    // TODO: verify if getName returns ldap only
+    owners.add(principal.getName());
+    detectionConfigDTO.setOwners(owners);*/
+
     DetectionConfigBean detectionConfigBean = convertDetectionConfigDTO2Bean(detectionConfigDTO);
     Long id = genericPojoDao.put(detectionConfigBean);
     detectionConfigDTO.setId(id);

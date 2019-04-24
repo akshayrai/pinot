@@ -20,6 +20,7 @@
 package org.apache.pinot.thirdeye.datalayer.pojo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -38,6 +39,7 @@ public class DetectionConfigBean extends AbstractBean {
   String description;
   long lastTimestamp;
   Map<String, Object> properties;
+  List<String> owners;
   boolean active;
   String yaml;
   Map<String, Object> componentSpecs;
@@ -80,6 +82,14 @@ public class DetectionConfigBean extends AbstractBean {
 
   public void setCron(String cron) {
     this.cron = cron;
+  }
+
+  public List<String> getOwners() {
+    return owners;
+  }
+
+  public void setOwners(List<String> owners) {
+    this.owners = owners;
   }
 
   public Map<String, Object> getProperties() {
