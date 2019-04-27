@@ -43,7 +43,7 @@ public class DetectionConfigManagerImpl extends AbstractManagerImpl<DetectionCon
 
   @Override
   public int update(DetectionConfigDTO detectionConfigDTO) {
-    ThirdEyePrincipal principal = ThirdEyeAuthFilter.getCurrentPrincipal();
+/*    ThirdEyePrincipal principal = ThirdEyeAuthFilter.getCurrentPrincipal();
     if (principal == null) {
       throw new NotAuthorizedException("Unable to fetch the principal for the user");
     }
@@ -51,7 +51,7 @@ public class DetectionConfigManagerImpl extends AbstractManagerImpl<DetectionCon
     List<String> owners = detectionConfigDTO.getOwners();
     if (owners != null && !owners.contains(principal.getName())) {
       throw new NotAuthorizedException("Permission denied. User not authorized to update the config.");
-    }
+    }*/
 
     if (detectionConfigDTO.getId() == null) {
       Long id = save(detectionConfigDTO);
@@ -74,7 +74,7 @@ public class DetectionConfigManagerImpl extends AbstractManagerImpl<DetectionCon
       return detectionConfigDTO.getId();
     }
 
-    ThirdEyePrincipal principal = ThirdEyeAuthFilter.getCurrentPrincipal();
+/*    ThirdEyePrincipal principal = ThirdEyeAuthFilter.getCurrentPrincipal();
     if (principal == null) {
       throw new NotAuthorizedException("Unable to fetch the principal for the user");
     }
@@ -84,7 +84,7 @@ public class DetectionConfigManagerImpl extends AbstractManagerImpl<DetectionCon
     }
     // TODO: verify if getName returns ldap only
     owners.add(principal.getName());
-    detectionConfigDTO.setOwners(owners);
+    detectionConfigDTO.setOwners(owners);*/
 
     DetectionConfigBean detectionConfigBean = convertDetectionConfigDTO2Bean(detectionConfigDTO);
     Long id = genericPojoDao.put(detectionConfigBean);
