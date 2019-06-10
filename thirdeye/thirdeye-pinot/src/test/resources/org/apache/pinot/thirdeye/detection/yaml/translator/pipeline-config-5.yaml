@@ -4,7 +4,7 @@ type: COMPOSITE_ALERT
 cron: "0 0 14 * * ? *"
 alerts:
   - type: METRIC_ALERT
-    name: metric_alert_on_test_metric
+    name: metric_alert_on_x_metric
     metric: test_metric
     dataset: test_dataset
     filters:
@@ -42,7 +42,7 @@ alerts:
     name: composite_alert_on_entity
     alerts:
       - type: METRIC_ALERT
-        name: metric alert on test_metric
+        name: metric_alert_on_y_metric
         metric: test_metric
         dataset: test_dataset
         rules:
@@ -52,7 +52,7 @@ alerts:
                 params:
                   max: 100
       - type: METRIC_ALERT
-        name: another_metric_alert_on_test_metric
+        name: metric_alert_on_z_metric
         metric: test_metric
         dataset: test_dataset
         rules:
@@ -61,3 +61,8 @@ alerts:
                 name: maxThreshold_1
                 params:
                   max: 100
+grouper:
+  - type: TRIGGER_CONDITION
+    name: test_grouper
+    params:
+      expression: composite_alert_on_entity || (metric_alert_on_x_metric && metric_alert_on_z_metric)
