@@ -21,6 +21,7 @@ package org.apache.pinot.thirdeye.dashboard;
 
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.cache.CacheBuilder;
+import io.dropwizard.auth.AuthValueFactoryProvider;
 import org.apache.pinot.thirdeye.anomaly.detection.DetectionJobScheduler;
 import org.apache.pinot.thirdeye.anomaly.onboard.DetectionOnboardResource;
 import org.apache.pinot.thirdeye.anomalydetection.alertFilterAutotune.AlertFilterAutotuneFactory;
@@ -249,6 +250,7 @@ public class ThirdEyeDashboardApplication
       env.jersey().register(new ThirdEyeAuthFilter(authenticator, authConfig.getAllowedPaths(), authConfig.getAdminUsers()));
       // auth resource
       env.jersey().register(new AuthResource(authenticator, authConfig.getCookieTTL() * 1000));
+      env.jersey().register(new AuthValueFactoryProvider.Binder<>(ThirdEyePrincipal.class));
     }
 
     env.lifecycle().manage(new Managed() {

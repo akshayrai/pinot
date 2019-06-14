@@ -22,6 +22,7 @@ package org.apache.pinot.thirdeye.detection.yaml;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import io.dropwizard.auth.Auth;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -34,9 +35,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.security.PermitAll;
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
+import javax.ws.rs.NotAuthorizedException;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -49,6 +52,7 @@ import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.pinot.thirdeye.anomaly.task.TaskConstants;
 import org.apache.pinot.thirdeye.api.Constants;
+import org.apache.pinot.thirdeye.auth.ThirdEyePrincipal;
 import org.apache.pinot.thirdeye.dataframe.util.MetricSlice;
 import org.apache.pinot.thirdeye.datalayer.bao.DatasetConfigManager;
 import org.apache.pinot.thirdeye.datalayer.bao.DetectionAlertConfigManager;
@@ -345,11 +349,11 @@ public class YamlResource {
     return Response.ok().entity(responseMessage).build();
   }
 
-  void updateDetectionPipeline(long detectionID, String yamlDetectionConfig) {
+  private void updateDetectionPipeline(long detectionID, String yamlDetectionConfig) {
     updateDetectionPipeline(detectionID, yamlDetectionConfig, 0, 0);
   }
 
-  void updateDetectionPipeline(long detectionID, String payload, long startTime, long endTime)
+  private void updateDetectionPipeline(long detectionID, String payload, long startTime, long endTime)
       throws IllegalArgumentException {
     DetectionConfigDTO existingDetectionConfig = this.detectionConfigDAO.findById(detectionID);
     DetectionConfigDTO detectionConfig;
@@ -387,17 +391,22 @@ public class YamlResource {
   @Path("/{id}")
   @Produces(MediaType.APPLICATION_JSON)
   @Consumes(MediaType.TEXT_PLAIN)
+  @PermitAll
   @ApiOperation("Edit a detection pipeline using a YAML config")
-  public Response updateDetectionPipelineApi(
+  public Response updateDetectionPipelineApi(@Auth ThirdEyePrincipal user,
       @ApiParam("yaml config") String payload,
       @ApiParam("the detection config id to edit") @PathParam("id") long id,
       @ApiParam("tuning window start time for tunable components")  @QueryParam("startTime") long startTime,
       @ApiParam("tuning window end time for tunable components") @QueryParam("endTime") long endTime) {
     Map<String, String> responseMessage = new HashMap<>();
     try {
+      DetectionConfigDTO existingDetectionConfig = this.detectionConfigDAO.findById(id);
+      LOG.info("Auth User " + user.getName());
       updateDetectionPipeline(id, payload, startTime, endTime);
     } catch (IllegalArgumentException e) {
       return processBadRequestResponse(PROP_DETECTION, YamlOperations.UPDATING.name(), payload, e);
+    } catch (NotAuthorizedException e) {
+      return Response.status(Response.Status.UNAUTHORIZED).entity(responseMessage).build();
     } catch (Exception e) {
       return processServerErrorResponse(PROP_DETECTION, YamlOperations.UPDATING.name(), payload, e);
     }
