@@ -51,7 +51,7 @@ public class TriggerConditionGrouper implements Grouper<TriggerConditionGrouperS
   private Map<String, Object> rightOp;
   private InputDataFetcher dataFetcher;
 
-  private static final String PROP_DETECTOR_COMPONENT_NAME = "detectorComponentName";
+  static final String PROP_DETECTOR_COMPONENT_NAME = "detectorComponentName";
   private static final String PROP_AND = "and";
   private static final String PROP_OR = "or";
   private static final String PROP_OPERATOR = "operator";
@@ -59,7 +59,7 @@ public class TriggerConditionGrouper implements Grouper<TriggerConditionGrouperS
   private static final String PROP_RIGHT_OP = "rightOp";
 
   private List<MergedAnomalyResultDTO> andGrouping(
-      List<MergedAnomalyResultDTO> anomaliesA, List<MergedAnomalyResultDTO> anomaliesB) {
+      List<MergedAnomalyResultDTO> anomalyListA, List<MergedAnomalyResultDTO> anomalyListB) {
     List<MergedAnomalyResultDTO> groupedAnomalies = new ArrayList<>();
 
 
@@ -88,11 +88,11 @@ public class TriggerConditionGrouper implements Grouper<TriggerConditionGrouperS
   }
 
   private List<MergedAnomalyResultDTO> orGrouping(
-      List<MergedAnomalyResultDTO> entityA, List<MergedAnomalyResultDTO> entityB) {
+      List<MergedAnomalyResultDTO> anomalyListA, List<MergedAnomalyResultDTO> anomalyListB) {
     List<MergedAnomalyResultDTO> groupedAnomalies = new ArrayList<>();
-    // Filter anomalies from entityA
-    // Filter anomalies from entityB
-    // Perform merge and return
+
+
+
     return groupedAnomalies;
   }
 
