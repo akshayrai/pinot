@@ -31,6 +31,7 @@ import org.apache.pinot.thirdeye.datalayer.bao.MergedAnomalyResultManager;
 import org.apache.pinot.thirdeye.datalayer.bao.MetricConfigManager;
 import org.apache.pinot.thirdeye.datalayer.bao.OverrideConfigManager;
 import org.apache.pinot.thirdeye.datalayer.bao.RawAnomalyResultManager;
+import org.apache.pinot.thirdeye.datalayer.bao.SessionManager;
 import org.apache.pinot.thirdeye.datalayer.bao.TaskManager;
 import org.apache.pinot.thirdeye.datalayer.bao.jdbc.AlertConfigManagerImpl;
 import org.apache.pinot.thirdeye.datalayer.bao.jdbc.AnomalyFunctionManagerImpl;
@@ -47,6 +48,7 @@ import org.apache.pinot.thirdeye.datalayer.bao.jdbc.MergedAnomalyResultManagerIm
 import org.apache.pinot.thirdeye.datalayer.bao.jdbc.MetricConfigManagerImpl;
 import org.apache.pinot.thirdeye.datalayer.bao.jdbc.OverrideConfigManagerImpl;
 import org.apache.pinot.thirdeye.datalayer.bao.jdbc.RawAnomalyResultManagerImpl;
+import org.apache.pinot.thirdeye.datalayer.bao.jdbc.SessionManagerImpl;
 import org.apache.pinot.thirdeye.datalayer.bao.jdbc.TaskManagerImpl;
 import org.apache.pinot.thirdeye.datalayer.dto.AlertConfigDTO;
 import org.apache.pinot.thirdeye.datalayer.dto.AnomalyFeedbackDTO;
@@ -62,6 +64,7 @@ import org.apache.pinot.thirdeye.datalayer.dto.JobDTO;
 import org.apache.pinot.thirdeye.datalayer.dto.MergedAnomalyResultDTO;
 import org.apache.pinot.thirdeye.datalayer.dto.MetricConfigDTO;
 import org.apache.pinot.thirdeye.datalayer.dto.OverrideConfigDTO;
+import org.apache.pinot.thirdeye.datalayer.dto.SessionDTO;
 import org.apache.pinot.thirdeye.datalayer.pojo.AlertConfigBean;
 import org.apache.pinot.thirdeye.datalayer.util.DaoProviderUtil;
 
@@ -105,6 +108,7 @@ public class RunAdhocDatabaseQueriesTool {
   private AlertConfigManager alertConfigDAO;
   private ClassificationConfigManager classificationConfigDAO;
   private ApplicationManager applicationDAO;
+  private SessionManager sessionDAO;
 
   public RunAdhocDatabaseQueriesTool(File persistenceFile)
       throws Exception {
@@ -129,6 +133,7 @@ public class RunAdhocDatabaseQueriesTool {
     alertConfigDAO = DaoProviderUtil.getInstance(AlertConfigManagerImpl.class);
     classificationConfigDAO = DaoProviderUtil.getInstance(ClassificationConfigManagerImpl.class);
     applicationDAO = DaoProviderUtil.getInstance(ApplicationManagerImpl.class);
+    sessionDAO = DaoProviderUtil.getInstance(SessionManagerImpl.class);
   }
 
   private void toggleAnomalyFunction(Long id) {
@@ -576,15 +581,63 @@ public class RunAdhocDatabaseQueriesTool {
     }
   }
 
+  private void test() {
+    List<Predicate> predicates = new ArrayList<>();
+    predicates.add(Predicate.EQ("principalType", "SERVICE"));
+    List<SessionDTO> sessions = this.sessionDAO.findByPredicate(Predicate.AND(predicates.toArray(new Predicate[0])));
+    List<DetectionConfigDTO> configs = detectionConfigDAO.findAll();
+    List<DetectionAlertConfigDTO> subs = detectionAlertConfigDAO.findAll();
+
+    LOG.info("Fetched detections = " + configs.size());
+    LOG.info("Fetched Sessions = " + sessions.size());
+
+    int i = 0;
+    for (DetectionConfigDTO config : configs) {
+      String createdBy = config.getCreatedBy();
+      String updatedBy = config.getUpdatedBy();
+
+      for (SessionDTO session : sessions) {
+        if (updatedBy != null && updatedBy.equalsIgnoreCase(session.getPrincipal())) {
+          LOG.info("ALERT " + config.getId() + " name = " + config.getName() + " updated by " + session.getPrincipal());
+          i++;
+        } else if (createdBy != null && createdBy.equalsIgnoreCase(session.getPrincipal())) {
+          LOG.info("ALERT " + config.getId() + " name = " + config.getName() + " created by " + session.getPrincipal());
+          i++;
+        }
+      }
+    }
+
+
+    int j = 0;
+    for (DetectionAlertConfigDTO config : subs) {
+      String createdBy = config.getCreatedBy();
+      String updatedBy = config.getUpdatedBy();
+
+      for (SessionDTO session : sessions) {
+        if (updatedBy != null && updatedBy.equalsIgnoreCase(session.getPrincipal())) {
+          LOG.info("SUBS " + config.getId() + " name = " + config.getName() + " updated by " + session.getPrincipal());
+          j++;
+        } else if (createdBy != null && createdBy.equalsIgnoreCase(session.getPrincipal())) {
+          LOG.info("SUBS " + config.getId() + " name = " + config.getName() + " created by " + session.getPrincipal());
+          j++;
+        }
+      }
+    }
+
+    LOG.info("Num of alert owned by service accounts = " + i);
+    LOG.info("Num of subs owned by service accounts = " + j);
+
+  }
+
   public static void main(String[] args) throws Exception {
 
-    File persistenceFile = new File(args[0]);
+    File persistenceFile = new File("/home/akrai/persistence.yml");
     if (!persistenceFile.exists()) {
       System.err.println("Missing file:" + persistenceFile);
       System.exit(1);
     }
     RunAdhocDatabaseQueriesTool dq = new RunAdhocDatabaseQueriesTool(persistenceFile);
-    dq.unsubscribedDetections();
+    dq.test();
     LOG.info("DONE");
   }
 

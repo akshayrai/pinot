@@ -18,12 +18,15 @@
  */
 package org.apache.pinot.thirdeye.detection.components;
 
+import com.google.common.base.Preconditions;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.commons.collections4.MapUtils;
 import org.apache.pinot.thirdeye.datalayer.dto.MergedAnomalyResultDTO;
+import org.apache.pinot.thirdeye.detection.ConfigUtils;
 import org.apache.pinot.thirdeye.detection.InputDataFetcher;
 import org.apache.pinot.thirdeye.detection.annotation.Components;
 import org.apache.pinot.thirdeye.detection.annotation.DetectionTag;
@@ -43,49 +46,126 @@ public class TriggerConditionGrouper implements Grouper<TriggerConditionGrouperS
   protected static final Logger LOG = LoggerFactory.getLogger(TriggerConditionGrouper.class);
 
   private String expression;
+  private String operator;
+  private Map<String, Object> leftOp;
+  private Map<String, Object> rightOp;
   private InputDataFetcher dataFetcher;
 
-  private void groupByTime() {
+  private static final String PROP_DETECTOR_COMPONENT_NAME = "detectorComponentName";
+  private static final String PROP_AND = "and";
+  private static final String PROP_OR = "or";
+  private static final String PROP_OPERATOR = "operator";
+  private static final String PROP_LEFT_OP = "leftOp";
+  private static final String PROP_RIGHT_OP = "rightOp";
 
-  }
-
-  @Override
-  public List<MergedAnomalyResultDTO> group(List<MergedAnomalyResultDTO> anomalies) {
+  private List<MergedAnomalyResultDTO> andGrouping(
+      List<MergedAnomalyResultDTO> anomaliesA, List<MergedAnomalyResultDTO> anomaliesB) {
     List<MergedAnomalyResultDTO> groupedAnomalies = new ArrayList<>();
-    if (anomalies.size() > 1000) {
-      // TODO: evaluate threshold and impact
-      LOG.warn("Lot of anomalies detected. Skipping grouping");
-      return anomalies;
-    }
 
-    ListMultimap<String, String> multimap = ArrayListMultimap.create();
 
-    for (MergedAnomalyResultDTO anomaly : anomalies) {
 
-    }
 
-    MergedAnomalyResultDTO groupedAnomaly = new MergedAnomalyResultDTO();
-    //groupedAnomaly.setType();
-    groupedAnomaly.setStartTime();
-    groupedAnomaly.setEndTime();
-
-    Map<String, String> properties = new HashMap<>();
-    groupedAnomaly.setProperties();
-    groupedAnomaly.setChildren((Set<MergedAnomalyResultDTO>) anomalies);
-    groupedAnomaly.setChild(false);
+    // Mark children
     for (MergedAnomalyResultDTO anomaly : anomalies) {
       anomaly.setChild(true);
     }
 
+    // Create Grouped Anomaly
+    MergedAnomalyResultDTO groupedAnomaly = new MergedAnomalyResultDTO();
+    //groupedAnomaly.setType();
+    groupedAnomaly.setStartTime();
+    groupedAnomaly.setEndTime();
+    Map<String, String> properties = new HashMap<>();
+    groupedAnomaly.setProperties();
+    groupedAnomaly.setChildren((Set<MergedAnomalyResultDTO>) anomalies);
+    groupedAnomaly.setChild(false);
+
+    // Store all anomalies
     groupedAnomalies.add(groupedAnomaly);
     groupedAnomalies.addAll(anomalies);
 
     return groupedAnomalies;
   }
 
+  private List<MergedAnomalyResultDTO> orGrouping(
+      List<MergedAnomalyResultDTO> entityA, List<MergedAnomalyResultDTO> entityB) {
+    List<MergedAnomalyResultDTO> groupedAnomalies = new ArrayList<>();
+    // Filter anomalies from entityA
+    // Filter anomalies from entityB
+    // Perform merge and return
+    return groupedAnomalies;
+  }
+
+  private List<MergedAnomalyResultDTO> executeChildExpression(Map<String, Object> op, List<MergedAnomalyResultDTO> anomalies) {
+    Preconditions.checkNotNull(op);
+
+    String value = MapUtils.getString(op, "value");
+    if (value != null) {
+      //filter and return anomalies;
+      List<MergedAnomalyResultDTO> filteredAnomalies = new ArrayList<>();
+      for (MergedAnomalyResultDTO anomaly : anomalies) {
+        if (anomaly.getProperties() != null && anomaly.getProperties().get(PROP_DETECTOR_COMPONENT_NAME) != null
+            && anomaly.getProperties().get(PROP_DETECTOR_COMPONENT_NAME).startsWith(value)) {
+          filteredAnomalies.add(anomaly);
+        }
+      }
+
+      return filteredAnomalies;
+    }
+
+    String operator = MapUtils.getString(op, PROP_OPERATOR);
+    Map<String, Object> leftOp = ConfigUtils.getMap(op.get(PROP_LEFT_OP));
+    Map<String, Object> rightOp = ConfigUtils.getMap(op.get(PROP_RIGHT_OP));
+    return groupAnomaliesByOperator(operator, leftOp, rightOp, anomalies);
+  }
+
+  private List<MergedAnomalyResultDTO> groupAnomaliesByOperator(String operator,
+      Map<String, Object> leftOp, Map<String, Object> rightOp, List<MergedAnomalyResultDTO> anomalies) {
+    Preconditions.checkNotNull(operator);
+    Preconditions.checkNotNull(leftOp);
+    Preconditions.checkNotNull(rightOp);
+
+    List<MergedAnomalyResultDTO> leftAnomalies = executeChildExpression(leftOp, anomalies);
+    List<MergedAnomalyResultDTO> rightAnomalies = executeChildExpression(rightOp, anomalies);
+
+    if (operator.equalsIgnoreCase(PROP_AND)) {
+      return andGrouping(leftAnomalies, rightAnomalies);
+    } else if (operator.equalsIgnoreCase(PROP_OR)) {
+      return orGrouping(leftAnomalies, rightAnomalies);
+    } else {
+      throw new RuntimeException("Unsupported operator");
+    }
+  }
+
+  // TODO: Build parse tree from string expression and execute
+  private Map<String, Object> buildOperatorTree(String expression) {
+    return new HashMap<>();
+  }
+
+  private List<MergedAnomalyResultDTO> groupAnomaliesByExpression(String expression, List<MergedAnomalyResultDTO> anomalies) {
+    Map<String, Object> operatorRoot = buildOperatorTree(expression);
+    String operator = MapUtils.getString(operatorRoot, PROP_OPERATOR);
+    Map<String, Object> leftOp = ConfigUtils.getMap(operatorRoot.get(PROP_LEFT_OP));
+    Map<String, Object> rightOp = ConfigUtils.getMap(operatorRoot.get(PROP_RIGHT_OP));
+    groupAnomaliesByOperator(operator, leftOp, rightOp, anomalies);
+    return anomalies;
+  }
+
+  @Override
+  public List<MergedAnomalyResultDTO> group(List<MergedAnomalyResultDTO> anomalies) {
+    if (operator != null) {
+      return groupAnomaliesByOperator(operator, leftOp, rightOp, anomalies);
+    } else {
+      return groupAnomaliesByExpression(expression, anomalies);
+    }
+  }
+
   @Override
   public void init(TriggerConditionGrouperSpec spec, InputDataFetcher dataFetcher) {
     this.expression = spec.getExpression();
+    this.operator = spec.getOperator();
+    this.leftOp = spec.getLeftOp();
+    this.rightOp = spec.getRightOp();
     this.dataFetcher = dataFetcher;
   }
 }
