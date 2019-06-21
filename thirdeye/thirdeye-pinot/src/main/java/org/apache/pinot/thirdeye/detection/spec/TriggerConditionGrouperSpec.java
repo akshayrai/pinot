@@ -36,7 +36,7 @@ public class TriggerConditionGrouperSpec extends AbstractSpec {
   }
 
   public String getOperator() {
-    return expression;
+    return operator;
   }
 
   public void setOperator(String operator) {

@@ -35,6 +35,8 @@ import static org.apache.pinot.thirdeye.detection.components.TriggerConditionGro
 
 public class TriggerConditionGrouperTest {
 
+  private static final String PROP_VALUE = "value";
+
   @BeforeMethod
   public void beforeMethod() {
 
@@ -48,9 +50,53 @@ public class TriggerConditionGrouperTest {
     return anomaly;
   }
 
+  /**
+   *
+   *
+   */
+  @Test
+  public void testAndGrouping() {
+    TriggerConditionGrouper grouper = new TriggerConditionGrouper();
+
+    List<MergedAnomalyResultDTO> anomalies = new ArrayList<>();
+    anomalies.add(makeAnomaly(0, 1000, "entityA"));
+    anomalies.add(makeAnomaly(500, 2000, "entityB"));
+    anomalies.add(makeAnomaly(1500, 2000, "entityA"));
+    anomalies.add(makeAnomaly(2500, 3000, "entityB"));
+
+    TriggerConditionGrouperSpec spec = new TriggerConditionGrouperSpec();
+    spec.setOperator(PROP_AND);
+    Map<String, Object> leftOp = new HashMap<>();
+    leftOp.put(PROP_VALUE, "entityA");
+    spec.setLeftOp(leftOp);
+
+    Map<String, Object> rigthOp = new HashMap<>();
+    rigthOp.put(PROP_VALUE, "entityB");
+    spec.setRightOp(rigthOp);
+
+    grouper.init(spec, null);
+    List<MergedAnomalyResultDTO> groupedAnomalies = grouper.group(anomalies);
+
+    Assert.assertEquals(groupedAnomalies.size(), 5);
+
+    int childCounter = 0;
+    int parentCounter = 0;
+    for (MergedAnomalyResultDTO anomaly : groupedAnomalies) {
+      if (anomaly.isChild()) {
+        childCounter++;
+      } else {
+        parentCounter++;
+        Assert.assertEquals(anomaly.getStartTime(), 500);
+        Assert.assertEquals(anomaly.getEndTime(), 1000);
+        Assert.assertEquals(anomaly.getChildren().size(), 2);
+      }
+    }
+    Assert.assertEquals(childCounter, 3);
+    Assert.assertEquals(parentCounter, 2);
+  }
 
   @Test
-  public void testAndGrouping() throws DetectorException {
+  public void testOrGrouping() {
     TriggerConditionGrouper grouper = new TriggerConditionGrouper();
 
     List<MergedAnomalyResultDTO> anomalies = new ArrayList<>();
@@ -58,13 +104,13 @@ public class TriggerConditionGrouperTest {
     anomalies.add(makeAnomaly(500, 2000, "entityB"));
 
     TriggerConditionGrouperSpec spec = new TriggerConditionGrouperSpec();
-    spec.setOperator("and");
+    spec.setOperator(PROP_OR);
     Map<String, Object> leftOp = new HashMap<>();
-    leftOp.put("value", "entityA");
+    leftOp.put(PROP_VALUE, "entityA");
     spec.setLeftOp(leftOp);
 
     Map<String, Object> rigthOp = new HashMap<>();
-    rigthOp.put("value", "entityB");
+    rigthOp.put(PROP_VALUE, "entityB");
     spec.setRightOp(rigthOp);
 
     grouper.init(spec, null);
@@ -79,8 +125,8 @@ public class TriggerConditionGrouperTest {
         childCounter++;
       } else {
         parentCounter++;
-        Assert.assertEquals(anomaly.getStartTime(), 500);
-        Assert.assertEquals(anomaly.getEndTime(), 1000);
+        Assert.assertEquals(anomaly.getStartTime(), 0);
+        Assert.assertEquals(anomaly.getEndTime(), 2000);
         Assert.assertEquals(anomaly.getChildren().size(), 2);
       }
     }
@@ -89,10 +135,6 @@ public class TriggerConditionGrouperTest {
   }
 
   @Test
-  public void testOrGrouping() throws DetectorException {
-  }
-
-  @Test
-  public void testNestedGrouping() throws DetectorException {
+  public void testNestedGrouping() {
   }
 }
