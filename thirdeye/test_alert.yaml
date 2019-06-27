@@ -1,0 +1,24 @@
+detectionName: explore_frame_overtime_alert_123_hangfei33333311113232
+description: If this alert fires then it means so-and-so and check so-and-so for irregularities
+metric: metricValue
+dataset: dataSentinelFrameFeaturesDaily
+filters:
+  featureName:
+  - standardization_job_standardizedSkillsV5
+
+dimensionExploration:
+  dimensions:
+  - metricType
+  - term
+
+rules:
+- detection:
+  - name: detection_rule_1
+    type: PERCENTAGE_RULE
+    params:
+      offset: wo1w
+      percentageChange: 0.1
+      pattern: UP_OR_DOWN
+
+owners:
+  - frame

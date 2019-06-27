@@ -62,6 +62,9 @@ public class DetectionEmailAlerter extends DetectionAlertScheme {
       (o1, o2) -> -1 * Long.compare(o1.getStartTime(), o2.getStartTime());
   private static final String DEFAULT_EMAIL_FORMATTER_TYPE = "MultipleAnomaliesEmailContentFormatter";
   private static final String EMAIL_WHITELIST_KEY = "emailWhitelist";
+  private static final String PROP_EMAIL_SCHEME = "EmailScheme";
+  private static final String PROP_EMAIL_PARAMS = "emailParams";
+  private static final String PROP_TEMPLATE = "template";
 
   private ThirdEyeAnomalyConfiguration teConfig;
 
@@ -128,15 +131,22 @@ public class DetectionEmailAlerter extends DetectionAlertScheme {
     whitelistRecipients(recipients);
     validateAlert(recipients, anomalies);
 
-    EmailContentFormatter emailContentFormatter =
-        EmailContentFormatterFactory.fromClassName(DEFAULT_EMAIL_FORMATTER_TYPE);
+    List<Map<String, Object>> emailParamsList
+        = ConfigUtils.getList(this.config.getAlertSchemes().get(PROP_EMAIL_SCHEME).get(PROP_EMAIL_PARAMS));
+    EmailContentFormatter emailContentFormatter;
+    if (emailParamsList.isEmpty()) {
+      emailContentFormatter =
+          EmailContentFormatterFactory.fromClassName(DEFAULT_EMAIL_FORMATTER_TYPE);
+    } else {
+      emailContentFormatter =
+          EmailContentFormatterFactory.fromClassName(emailParamsList.get(0).get(PROP_TEMPLATE).toString());
+    }
 
     emailContentFormatter.init(new Properties(),
         EmailContentFormatterConfiguration.fromThirdEyeAnomalyConfiguration(this.teConfig));
 
-    List<AnomalyResult> anomalyResultListOfGroup = new ArrayList<>();
-    anomalyResultListOfGroup.addAll(anomalies);
-    Collections.sort(anomalyResultListOfGroup, COMPARATOR_DESC);
+    List<AnomalyResult> anomalyResultListOfGroup = new ArrayList<>(anomalies);
+    anomalyResultListOfGroup.sort(COMPARATOR_DESC);
 
     AlertConfigDTO alertConfig = new AlertConfigDTO();
     alertConfig.setName(this.config.getName());
