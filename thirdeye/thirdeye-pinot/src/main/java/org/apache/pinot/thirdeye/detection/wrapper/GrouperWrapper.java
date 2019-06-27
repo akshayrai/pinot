@@ -69,7 +69,6 @@ public class GrouperWrapper extends DetectionPipeline {
     this.grouper = (Grouper) this.config.getComponents().get(this.grouperName);
     Preconditions.checkArgument(this.config.getProperties().containsKey(PROP_ENTITY_NAME));
     this.entityName = this.config.getProperties().get(PROP_ENTITY_NAME).toString();
-
   }
 
   /**

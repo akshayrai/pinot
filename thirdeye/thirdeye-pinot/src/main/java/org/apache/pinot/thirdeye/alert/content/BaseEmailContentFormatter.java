@@ -202,7 +202,7 @@ public abstract class BaseEmailContentFormatter implements EmailContentFormatter
       Collection<AnomalyResult> anomalies) {
     Map<String, Object> templateData = new HashMap<>();
 
-    DateTimeZone timeZone = DateTimeZone.forTimeZone(AlertTaskRunnerV2.DEFAULT_TIME_ZONE);
+    DateTimeZone timeZone = DateTimeZone.forTimeZone(TimeZone.getTimeZone(DEFAULT_TIME_ZONE));
 
     Set<String> metrics = new TreeSet<>();
     Set<String> datasets = new TreeSet<>();
@@ -592,13 +592,17 @@ public abstract class BaseEmailContentFormatter implements EmailContentFormatter
     String endTime;
     String timezone;
     String issueType;
+    String score;
+    Double weight;
+    String groupKey;
 
     private static String RAW_VALUE_FORMAT = "%.0f";
     private static String PERCENTAGE_FORMAT = "%.2f %%";
 
     public AnomalyReportEntity(String anomalyId, String anomalyURL, String baselineVal, String currentVal, Double swi,
         List<String> dimensions, String duration, String feedback, String function, String funcDescription,
-        String metric, String startTime, String endTime, String timezone, String issueType) {
+        String metric, String startTime, String endTime, String timezone, String issueType, String score, double weight,
+        String groupKey) {
       this.anomalyId = anomalyId;
       this.anomalyURL = anomalyURL;
       this.baselineVal = baselineVal;
@@ -620,6 +624,9 @@ public abstract class BaseEmailContentFormatter implements EmailContentFormatter
       this.endTime = endTime;
       this.timezone = timezone;
       this.issueType = issueType;
+      this.score = score;
+      this.weight = weight;
+      this.groupKey = groupKey;
     }
 
     public void setSeasonalValues(COMPARE_MODE compareMode, double seasonalValue, double current) {
@@ -791,6 +798,30 @@ public abstract class BaseEmailContentFormatter implements EmailContentFormatter
 
     public void setIssueType(String issueType) {
       this.issueType = issueType;
+    }
+
+    public void setWeight(Double weight) {
+      this.weight = weight;
+    }
+
+    public double getWeight() {
+      return weight;
+    }
+
+    public String getScore() {
+      return score;
+    }
+
+    public void setScore(String score) {
+      this.score = score;
+    }
+
+    public String getGroupKey() {
+      return groupKey;
+    }
+
+    public void setGroupKey(String groupKey) {
+      this.groupKey = groupKey;
     }
 
     public boolean isPositiveWoWLift() {

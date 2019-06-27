@@ -25,22 +25,16 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import org.apache.pinot.thirdeye.anomaly.alert.util.EmailScreenshotHelper;
-import org.apache.pinot.thirdeye.anomalydetection.context.AnomalyFeedback;
 import org.apache.pinot.thirdeye.anomalydetection.context.AnomalyResult;
 import org.apache.pinot.thirdeye.datalayer.bao.DetectionConfigManager;
 import org.apache.pinot.thirdeye.datalayer.dto.DetectionConfigDTO;
-import org.apache.pinot.thirdeye.datalayer.dto.EventDTO;
 import org.apache.pinot.thirdeye.datalayer.dto.MergedAnomalyResultDTO;
 import org.apache.pinot.thirdeye.datasource.DAORegistry;
 import org.apache.pinot.thirdeye.util.ThirdEyeUtils;
-import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,11 +48,12 @@ public class EntityContentFormatter extends BaseEmailContentFormatter{
   public static final String EMAIL_TEMPLATE = "emailTemplate";
 
   public static final String DEFAULT_EMAIL_TEMPLATE = "entity-anomaly-report.ftl";
+  public static final String PROP_ANOMALY_SCORE = "score";
+  public static final String PROP_GROUP_KEY = "groupKey";
 
   private DetectionConfigManager configDAO = null;
 
   public EntityContentFormatter(){
-
   }
 
   @Override
@@ -71,23 +66,10 @@ public class EntityContentFormatter extends BaseEmailContentFormatter{
   @Override
   protected void updateTemplateDataByAnomalyResults(Map<String, Object> templateData,
       Collection<AnomalyResult> anomalies, EmailContentFormatterContext context) {
-    DateTime windowStart = DateTime.now();
-    DateTime windowEnd = new DateTime(0);
-
     Map<String, Long> functionToId = new HashMap<>();
-    Multimap<String, String> anomalyDimensions = ArrayListMultimap.create();
     Multimap<String, AnomalyReportEntity> functionAnomalyReports = ArrayListMultimap.create();
     Multimap<String, AnomalyReportEntity> entityAnomalyReports = ArrayListMultimap.create();
-    List<AnomalyReportEntity> anomalyDetails = new ArrayList<>();
     List<String> anomalyIds = new ArrayList<>();
-
-    List<AnomalyResult> sortedAnomalies = new ArrayList<>(anomalies);
-    Collections.sort(sortedAnomalies, new Comparator<AnomalyResult>() {
-      @Override
-      public int compare(AnomalyResult o1, AnomalyResult o2) {
-        return Double.compare(o1.getWeight(), o2.getWeight());
-      }
-    });
 
     for (AnomalyResult anomalyResult : anomalies) {
       if (!(anomalyResult instanceof MergedAnomalyResultDTO)) {
@@ -96,19 +78,7 @@ public class EntityContentFormatter extends BaseEmailContentFormatter{
       }
       MergedAnomalyResultDTO anomaly = (MergedAnomalyResultDTO) anomalyResult;
 
-      DateTime anomalyStartTime = new DateTime(anomaly.getStartTime(), dateTimeZone);
-      DateTime anomalyEndTime = new DateTime(anomaly.getEndTime(), dateTimeZone);
-
-      if (anomalyStartTime.isBefore(windowStart)) {
-        windowStart = anomalyStartTime;
-      }
-      if (anomalyEndTime.isAfter(windowEnd)) {
-        windowEnd = anomalyEndTime;
-      }
-
-      AnomalyFeedback feedback = anomaly.getFeedback();
-
-      String feedbackVal = getFeedbackValue(feedback);
+      String feedbackVal = getFeedbackValue(anomaly.getFeedback());
 
       String functionName = "Alerts";
       String funcDescription = "";
@@ -130,7 +100,7 @@ public class EntityContentFormatter extends BaseEmailContentFormatter{
           ThirdEyeUtils.getRoundedValue(anomaly.getAvgBaselineVal()),
           ThirdEyeUtils.getRoundedValue(anomaly.getAvgCurrentVal()),
           0d,
-          getDimensionsList(anomaly.getDimensions()),
+          null,
           getTimeDiffInHours(anomaly.getStartTime(), anomaly.getEndTime()), // duration
           feedbackVal,
           functionName,
@@ -139,56 +109,25 @@ public class EntityContentFormatter extends BaseEmailContentFormatter{
           getDateString(anomaly.getStartTime(), dateTimeZone),
           getDateString(anomaly.getEndTime(), dateTimeZone),
           getTimezoneString(dateTimeZone),
-          getIssueType(anomaly)
+          getIssueType(anomaly),
+          anomaly.getProperties().get(PROP_ANOMALY_SCORE),
+          anomaly.getWeight(),
+          anomaly.getProperties().get(PROP_GROUP_KEY)
       );
-
-      // dimension filters / values
-      for (Map.Entry<String, String> entry : anomaly.getDimensions().entrySet()) {
-        anomalyDimensions.put(entry.getKey(), entry.getValue());
-      }
-
 
       // include notified alerts only in the email
       if (!includeSentAnomaliesOnly || anomaly.isNotified()) {
-        anomalyDetails.add(anomalyReport);
         anomalyIds.add(anomalyReport.getAnomalyId());
         functionAnomalyReports.put(functionName, anomalyReport);
-        metricAnomalyReports.put(anomaly.getMetric(), anomalyReport);
+        entityAnomalyReports.put(anomaly.getProperties().get("entityName"), anomalyReport);
         functionToId.put(functionName, id);
       }
     }
 
-    // holidays
-    final DateTime eventStart = windowStart.minus(preEventCrawlOffset);
-    final DateTime eventEnd = windowEnd.plus(postEventCrawlOffset);
-    Map<String, List<String>> targetDimensions = new HashMap<>();
-    if (emailContentFormatterConfiguration.getHolidayCountriesWhitelist() != null) {
-      targetDimensions.put(EVENT_FILTER_COUNTRY, emailContentFormatterConfiguration.getHolidayCountriesWhitelist());
-    }
-    List<EventDTO> holidays = getHolidayEvents(eventStart, eventEnd, targetDimensions);
-    Collections.sort(holidays, new Comparator<EventDTO>() {
-      @Override
-      public int compare(EventDTO o1, EventDTO o2) {
-        return Long.compare(o1.getStartTime(), o2.getStartTime());
-      }
-    });
 
-    // Insert anomaly snapshot image
-    if (anomalyDetails.size() == 1) {
-      AnomalyReportEntity singleAnomaly = anomalyDetails.get(0);
-      try {
-        imgPath = EmailScreenshotHelper.takeGraphScreenShot(singleAnomaly.getAnomalyId(),
-            emailContentFormatterConfiguration);
-      } catch (Exception e) {
-        LOG.error("Exception while embedding screenshot for anomaly {}", singleAnomaly.getAnomalyId(), e);
-      }
-    }
-
-    templateData.put("anomalyDetails", anomalyDetails);
     templateData.put("anomalyIds", Joiner.on(",").join(anomalyIds));
-    templateData.put("holidays", holidays);
     templateData.put("detectionToAnomalyDetailsMap", functionAnomalyReports.asMap());
-    templateData.put("entityToAnomalyDetailsMap", metricAnomalyReports.asMap());
+    templateData.put("entityToAnomalyDetailsMap", entityAnomalyReports.asMap());
     templateData.put("functionToId", functionToId);
   }
 }

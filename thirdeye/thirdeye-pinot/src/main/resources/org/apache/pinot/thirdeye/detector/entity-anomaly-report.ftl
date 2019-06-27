@@ -72,7 +72,7 @@
                     <#assign newTable = false>
                     <tr style="border-bottom: 1px solid #C7D1D8;">
                       <td style="padding: 6px 12px;white-space: nowrap;">
-                        <div style="color: rgba(0,0,0,0.9); font-size:14px; line-height:20px;">${anomaly.entityName}</div>
+                        <div style="color: rgba(0,0,0,0.9); font-size:14px; line-height:20px;">${anomaly.groupKey}</div>
                         <span style="color: rgba(0,0,0,0.6); font-size:12px; line-height:16px;">${anomaly.duration}</span>
                         <a style="font-weight: bold; text-decoration: none; font-size:14px; line-height:20px; color: #0073B1;" href="${anomaly.anomalyURL}${anomaly.anomalyId}"
                            target="_blank">(view)</a>

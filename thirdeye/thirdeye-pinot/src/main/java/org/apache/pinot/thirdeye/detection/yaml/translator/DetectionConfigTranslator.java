@@ -192,6 +192,7 @@ public class DetectionConfigTranslator extends ConfigTranslator<DetectionConfigD
     Map<String, Collection<String>> dimensionFiltersMap = ConfigUtils.getMap(metricAlertConfigMap.get(PROP_FILTERS));
     String metricUrn = MetricEntity.fromMetric(dimensionFiltersMap, metricAttributesMap.fetchMetric(metricAlertConfigMap).getId()).getUrn();
     Map<String, Object> mergerProperties = ConfigUtils.getMap(metricAlertConfigMap.get(PROP_MERGER));
+    String entityName = MapUtils.getString(metricAlertConfigMap, PROP_ENTITY_NAME);
 
     // Translate all the rules
     List<Map<String, Object>> ruleYamls = getList(metricAlertConfigMap.get(PROP_RULES));
@@ -363,6 +364,7 @@ public class DetectionConfigTranslator extends ConfigTranslator<DetectionConfigD
       Map<String, Object> grouperYaml, List<Map<String, Object>> nestedProps) {
     Map<String, Object> properties = new HashMap<>();
     properties.put(PROP_CLASS_NAME, GrouperWrapper.class.getName());
+    properties.put(PROP_ENTITY_NAME, entityName);
     properties.put(PROP_NESTED, nestedProps);
     if (entityName != null) {
       properties.put(PROP_ENTITY_NAME, entityName);

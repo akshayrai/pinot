@@ -151,7 +151,10 @@ public class HierarchicalAnomaliesEmailContentFormatter extends BaseEmailContent
         getDateString(anomaly.getStartTime(), dateTimeZone),
         getDateString(anomaly.getEndTime(), dateTimeZone),
         getTimezoneString(dateTimeZone),
-        getIssueType(anomaly)
+        getIssueType(anomaly),
+        null,
+        anomaly.getWeight(),
+        null
     );
 
     List<String> affectedCountries = getMatchedFilterValues(anomaly, "country");

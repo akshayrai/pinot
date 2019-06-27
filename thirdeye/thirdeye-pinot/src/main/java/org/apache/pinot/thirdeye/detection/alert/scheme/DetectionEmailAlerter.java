@@ -20,6 +20,7 @@
 package org.apache.pinot.thirdeye.detection.alert.scheme;
 
 import com.google.common.base.Preconditions;
+import org.apache.commons.collections4.MapUtils;
 import org.apache.pinot.thirdeye.alert.commons.EmailContentFormatterFactory;
 import org.apache.pinot.thirdeye.alert.commons.EmailEntity;
 import org.apache.pinot.thirdeye.alert.content.EmailContentFormatter;
@@ -131,15 +132,14 @@ public class DetectionEmailAlerter extends DetectionAlertScheme {
     whitelistRecipients(recipients);
     validateAlert(recipients, anomalies);
 
-    List<Map<String, Object>> emailParamsList
-        = ConfigUtils.getList(this.config.getAlertSchemes().get(PROP_EMAIL_SCHEME).get(PROP_EMAIL_PARAMS));
+    Map<String, Object> emailParams = ConfigUtils.getMap(this.config.getAlertSchemes().get(PROP_EMAIL_SCHEME));
     EmailContentFormatter emailContentFormatter;
-    if (emailParamsList.isEmpty()) {
+    if (emailParams.isEmpty() || !emailParams.containsKey(PROP_TEMPLATE)) {
       emailContentFormatter =
           EmailContentFormatterFactory.fromClassName(DEFAULT_EMAIL_FORMATTER_TYPE);
     } else {
       emailContentFormatter =
-          EmailContentFormatterFactory.fromClassName(emailParamsList.get(0).get(PROP_TEMPLATE).toString());
+          EmailContentFormatterFactory.fromClassName(emailParams.get(PROP_TEMPLATE).toString());
     }
 
     emailContentFormatter.init(new Properties(),

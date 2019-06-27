@@ -142,7 +142,10 @@ public class MultipleAnomaliesEmailContentFormatter extends BaseEmailContentForm
           getDateString(anomaly.getStartTime(), dateTimeZone),
           getDateString(anomaly.getEndTime(), dateTimeZone),
           getTimezoneString(dateTimeZone),
-          getIssueType(anomaly)
+          getIssueType(anomaly),
+          null,
+          anomaly.getWeight(),
+          null
       );
 
       // dimension filters / values
