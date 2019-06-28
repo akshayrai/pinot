@@ -17,6 +17,7 @@
 package org.apache.pinot.thirdeye.tools;
 
 import org.apache.pinot.thirdeye.anomaly.task.TaskConstants;
+import org.apache.pinot.thirdeye.constant.AnomalyResultSource;
 import org.apache.pinot.thirdeye.datalayer.bao.AlertConfigManager;
 import org.apache.pinot.thirdeye.datalayer.bao.AnomalyFunctionManager;
 import org.apache.pinot.thirdeye.datalayer.bao.ApplicationManager;
@@ -576,15 +577,26 @@ public class RunAdhocDatabaseQueriesTool {
     }
   }
 
+  private void test() {
+    List<MergedAnomalyResultDTO> anomalies = mergedResultDAO.findByDetectionConfigAndIdGreaterThan(116257854l,0l);
+    for (MergedAnomalyResultDTO anomaly : anomalies) {
+      if (!anomaly.isChild()) {
+        LOG.info("FOUND Parent " + anomaly.getId());
+        anomaly.setAnomalyResultSource(AnomalyResultSource.DEFAULT_ANOMALY_DETECTION);
+        mergedResultDAO.save(anomaly);
+      }
+    }
+  }
+
   public static void main(String[] args) throws Exception {
 
-    File persistenceFile = new File(args[0]);
+    File persistenceFile = new File("/home/akrai/local-persistence.yml");
     if (!persistenceFile.exists()) {
       System.err.println("Missing file:" + persistenceFile);
       System.exit(1);
     }
     RunAdhocDatabaseQueriesTool dq = new RunAdhocDatabaseQueriesTool(persistenceFile);
-    dq.unsubscribedDetections();
+    dq.test();
     LOG.info("DONE");
   }
 

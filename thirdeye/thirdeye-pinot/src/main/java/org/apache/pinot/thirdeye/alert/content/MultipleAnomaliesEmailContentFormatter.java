@@ -74,6 +74,8 @@ public class MultipleAnomaliesEmailContentFormatter extends BaseEmailContentForm
   @Override
   protected void updateTemplateDataByAnomalyResults(Map<String, Object> templateData,
       Collection<AnomalyResult> anomalies, EmailContentFormatterContext context) {
+    enrichMetricInfo(templateData, anomalies);
+
     DateTime windowStart = DateTime.now();
     DateTime windowEnd = new DateTime(0);
 
@@ -145,6 +147,7 @@ public class MultipleAnomaliesEmailContentFormatter extends BaseEmailContentForm
           getIssueType(anomaly),
           null,
           anomaly.getWeight(),
+          null,
           null
       );
 

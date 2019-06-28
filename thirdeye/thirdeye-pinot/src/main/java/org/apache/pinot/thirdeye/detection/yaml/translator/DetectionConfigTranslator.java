@@ -130,7 +130,8 @@ public class DetectionConfigTranslator extends ConfigTranslator<DetectionConfigD
   private static final String PROP_FILTERS = "filters";
   private static final String PROP_TYPE = "type";
   private static final String PROP_CLASS_NAME = "className";
-  private static final String PROP_ENTITY_NAME = "subEntityName";
+  private static final String PROP_ENTITY_NAME = "name";
+  private static final String PROP_ENTITY_KEY = "subEntityName";
   private static final String PROP_PARAMS = "params";
   private static final String PROP_METRIC_URN = "metricUrn";
   private static final String PROP_DIMENSION_FILTER_METRIC = "dimensionFilterMetric";
@@ -192,7 +193,6 @@ public class DetectionConfigTranslator extends ConfigTranslator<DetectionConfigD
     Map<String, Collection<String>> dimensionFiltersMap = ConfigUtils.getMap(metricAlertConfigMap.get(PROP_FILTERS));
     String metricUrn = MetricEntity.fromMetric(dimensionFiltersMap, metricAttributesMap.fetchMetric(metricAlertConfigMap).getId()).getUrn();
     Map<String, Object> mergerProperties = ConfigUtils.getMap(metricAlertConfigMap.get(PROP_MERGER));
-    String entityName = MapUtils.getString(metricAlertConfigMap, PROP_ENTITY_NAME);
 
     // Translate all the rules
     List<Map<String, Object>> ruleYamls = getList(metricAlertConfigMap.get(PROP_RULES));
@@ -233,7 +233,7 @@ public class DetectionConfigTranslator extends ConfigTranslator<DetectionConfigD
   }
 
   private Map<String, Object> translateCompositeAlert(Map<String, Object> compositeAlertConfigMap) {
-    Map<String, Object> properties = new HashMap<>();
+    Map<String, Object> properties;
 
     // Recursively translate all the sub-alerts
     List<Map<String, Object>> subDetectionYamls = ConfigUtils.getList(compositeAlertConfigMap.get(PROP_ALERTS));
@@ -364,10 +364,9 @@ public class DetectionConfigTranslator extends ConfigTranslator<DetectionConfigD
       Map<String, Object> grouperYaml, List<Map<String, Object>> nestedProps) {
     Map<String, Object> properties = new HashMap<>();
     properties.put(PROP_CLASS_NAME, GrouperWrapper.class.getName());
-    properties.put(PROP_ENTITY_NAME, entityName);
     properties.put(PROP_NESTED, nestedProps);
     if (entityName != null) {
-      properties.put(PROP_ENTITY_NAME, entityName);
+      properties.put(PROP_ENTITY_KEY, entityName);
     }
 
     String grouperType = MapUtils.getString(grouperYaml, PROP_TYPE);

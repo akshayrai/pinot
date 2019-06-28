@@ -63,8 +63,7 @@ public class DetectionEmailAlerter extends DetectionAlertScheme {
       (o1, o2) -> -1 * Long.compare(o1.getStartTime(), o2.getStartTime());
   private static final String DEFAULT_EMAIL_FORMATTER_TYPE = "MultipleAnomaliesEmailContentFormatter";
   private static final String EMAIL_WHITELIST_KEY = "emailWhitelist";
-  private static final String PROP_EMAIL_SCHEME = "EmailScheme";
-  private static final String PROP_EMAIL_PARAMS = "emailParams";
+  private static final String PROP_EMAIL_SCHEME = "emailScheme";
   private static final String PROP_TEMPLATE = "template";
 
   private ThirdEyeAnomalyConfiguration teConfig;
@@ -135,9 +134,11 @@ public class DetectionEmailAlerter extends DetectionAlertScheme {
     Map<String, Object> emailParams = ConfigUtils.getMap(this.config.getAlertSchemes().get(PROP_EMAIL_SCHEME));
     EmailContentFormatter emailContentFormatter;
     if (emailParams.isEmpty() || !emailParams.containsKey(PROP_TEMPLATE)) {
+      LOG.info("Using the " + DEFAULT_EMAIL_FORMATTER_TYPE + " email template.");
       emailContentFormatter =
           EmailContentFormatterFactory.fromClassName(DEFAULT_EMAIL_FORMATTER_TYPE);
     } else {
+      LOG.info("Using the " + emailParams.get(PROP_TEMPLATE) + " email template.");
       emailContentFormatter =
           EmailContentFormatterFactory.fromClassName(emailParams.get(PROP_TEMPLATE).toString());
     }

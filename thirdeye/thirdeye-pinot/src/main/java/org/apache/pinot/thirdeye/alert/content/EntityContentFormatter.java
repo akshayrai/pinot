@@ -112,14 +112,15 @@ public class EntityContentFormatter extends BaseEmailContentFormatter{
           getIssueType(anomaly),
           anomaly.getProperties().get(PROP_ANOMALY_SCORE),
           anomaly.getWeight(),
-          anomaly.getProperties().get(PROP_GROUP_KEY)
+          anomaly.getProperties().get(PROP_GROUP_KEY),
+          anomaly.getProperties().get("subEntityName")
       );
 
       // include notified alerts only in the email
       if (!includeSentAnomaliesOnly || anomaly.isNotified()) {
         anomalyIds.add(anomalyReport.getAnomalyId());
         functionAnomalyReports.put(functionName, anomalyReport);
-        entityAnomalyReports.put(anomaly.getProperties().get("entityName"), anomalyReport);
+        entityAnomalyReports.put(anomaly.getProperties().get("subEntityName"), anomalyReport);
         functionToId.put(functionName, id);
       }
     }

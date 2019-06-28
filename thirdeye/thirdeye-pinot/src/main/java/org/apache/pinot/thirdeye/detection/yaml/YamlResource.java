@@ -422,9 +422,9 @@ public class YamlResource {
    * of modifying other configs when making programmatic calls.
    */
   private void authorizeUser(ThirdEyePrincipal user, long id, String authEntity) {
-    if (user == null || StringUtils.isBlank(user.getName())) {
+/*    if (user == null || StringUtils.isBlank(user.getName())) {
       throw new NotAuthorizedException("Unable to find the credentials in the request");
-    }
+    }*/
 
     // Authorize only service accounts
     if (isServiceAccount(user)) {
