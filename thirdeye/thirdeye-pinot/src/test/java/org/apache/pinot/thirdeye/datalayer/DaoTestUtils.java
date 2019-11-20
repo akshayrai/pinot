@@ -31,10 +31,7 @@ import org.apache.pinot.thirdeye.anomaly.job.JobConstants;
 import org.apache.pinot.thirdeye.anomaly.override.OverrideConfigHelper;
 import org.apache.pinot.thirdeye.anomaly.task.TaskConstants;
 import org.apache.pinot.thirdeye.anomaly.utils.EmailUtils;
-import org.apache.pinot.thirdeye.anomalydetection.context.AnomalyResult;
-import org.apache.pinot.thirdeye.anomalydetection.context.RawAnomalyResult;
 import org.apache.pinot.thirdeye.anomalydetection.performanceEvaluation.PerformanceEvaluationMethod;
-import org.apache.pinot.thirdeye.common.dimension.DimensionMap;
 import org.apache.pinot.thirdeye.common.metric.MetricType;
 import org.apache.pinot.thirdeye.constant.MetricAggFunction;
 import org.apache.pinot.thirdeye.datalayer.bao.DetectionConfigManager;
@@ -196,18 +193,6 @@ public class DaoTestUtils {
     return configDTO;
   }
 
-  public static AnomalyResult getAnomalyResult() {
-    AnomalyResult anomalyResult = new RawAnomalyResult();
-    anomalyResult.setScore(1.1);
-    anomalyResult.setStartTime(System.currentTimeMillis());
-    anomalyResult.setEndTime(System.currentTimeMillis());
-    anomalyResult.setWeight(10.1);
-    DimensionMap dimensionMap = new DimensionMap();
-    dimensionMap.put("dimensionName", "dimensionValue");
-    anomalyResult.setDimensions(dimensionMap);
-    return anomalyResult;
-  }
-
   public static JobDTO getTestJobSpec() {
     JobDTO jobSpec = new JobDTO();
     jobSpec.setJobName("Test_Anomaly_Job");
@@ -223,14 +208,21 @@ public class DaoTestUtils {
   public static DatasetConfigDTO getTestDatasetConfig(String collection) {
     DatasetConfigDTO datasetConfigDTO = new DatasetConfigDTO();
     datasetConfigDTO.setDataset(collection);
+    datasetConfigDTO.setTimeUnit(TimeUnit.DAYS);
+    datasetConfigDTO.setTimeDuration(1);
+
+/*    DatasetConfigDTO datasetConfigDTO = new DatasetConfigDTO();
+    datasetConfigDTO.setDataset(collection);
+    datasetConfigDTO.setDisplayName(collection);
     datasetConfigDTO.setDimensions(Lists.newArrayList("country", "browser", "environment"));
     datasetConfigDTO.setTimeColumn("time");
     datasetConfigDTO.setTimeDuration(1);
     datasetConfigDTO.setTimeUnit(TimeUnit.HOURS);
+    datasetConfigDTO.setTimezone("UTC");
     datasetConfigDTO.setActive(true);
     datasetConfigDTO.setRequiresCompletenessCheck(false);
     datasetConfigDTO.setDataSource(PinotThirdEyeDataSource.DATA_SOURCE_NAME);
-    datasetConfigDTO.setLastRefreshTime(System.currentTimeMillis());
+    datasetConfigDTO.setLastRefreshTime(System.currentTimeMillis());*/
     return datasetConfigDTO;
   }
 
