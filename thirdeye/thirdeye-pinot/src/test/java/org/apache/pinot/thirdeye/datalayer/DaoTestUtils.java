@@ -33,6 +33,7 @@ import org.apache.pinot.thirdeye.anomaly.task.TaskConstants;
 import org.apache.pinot.thirdeye.anomaly.utils.EmailUtils;
 import org.apache.pinot.thirdeye.anomalydetection.performanceEvaluation.PerformanceEvaluationMethod;
 import org.apache.pinot.thirdeye.common.metric.MetricType;
+import org.apache.pinot.thirdeye.constant.AnomalyResultSource;
 import org.apache.pinot.thirdeye.constant.MetricAggFunction;
 import org.apache.pinot.thirdeye.datalayer.bao.DetectionConfigManager;
 import org.apache.pinot.thirdeye.datalayer.dto.AlertConfigDTO;
@@ -377,9 +378,9 @@ public class DaoTestUtils {
     anomaly.setCollection(collection);
     anomaly.setMetric(metric);
     anomaly.setWeight(weight);
-    anomaly.setFunctionId(functionId);
     anomaly.setDetectionConfigId(functionId);
     anomaly.setCreatedTime(createdTime);
+    anomaly.setAnomalyResultSource(AnomalyResultSource.DEFAULT_ANOMALY_DETECTION);
 
     return anomaly;
   }

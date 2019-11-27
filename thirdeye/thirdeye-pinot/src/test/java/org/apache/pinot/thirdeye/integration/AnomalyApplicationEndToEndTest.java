@@ -41,9 +41,11 @@ import org.apache.pinot.thirdeye.datalayer.bao.MergedAnomalyResultManager;
 import org.apache.pinot.thirdeye.datalayer.bao.MetricConfigManager;
 import org.apache.pinot.thirdeye.datalayer.bao.TaskManager;
 import org.apache.pinot.thirdeye.datalayer.dto.AnomalyFunctionDTO;
+import org.apache.pinot.thirdeye.datalayer.dto.DetectionConfigDTO;
 import org.apache.pinot.thirdeye.datalayer.dto.JobDTO;
 import org.apache.pinot.thirdeye.datalayer.dto.MergedAnomalyResultDTO;
 import org.apache.pinot.thirdeye.datalayer.dto.TaskDTO;
+import org.apache.pinot.thirdeye.datalayer.util.Predicate;
 import org.apache.pinot.thirdeye.datasource.DAORegistry;
 import org.apache.pinot.thirdeye.datasource.ThirdEyeCacheRegistry;
 import org.apache.pinot.thirdeye.datasource.loader.AggregationLoader;
@@ -183,6 +185,8 @@ public class AnomalyApplicationEndToEndTest {
 
     // create test subscription
     daoRegistry.getDetectionAlertConfigManager().save(getTestDetectionAlertConfig(daoRegistry.getDetectionConfigManager(), alertConfigFile));
+
+    anomalyDAO.save(getTestMergedAnomalyResult(System.currentTimeMillis(), System.currentTimeMillis()+1, collection, metric, 0, functionId, System.currentTimeMillis()));
   }
 
   @Test
@@ -198,13 +202,17 @@ public class AnomalyApplicationEndToEndTest {
 
     // startDataCompletenessChecker
     startDataCompletenessScheduler();
-    Thread.sleep(1000);
+    Thread.sleep(10000);
+
+    // Schedule 1 data completeness job
     int jobSizeDataCompleteness = daoRegistry.getJobDAO().findAll().size();
-    int taskSizeDataCompleteness = taskDAO.findAll().size();
     Assert.assertEquals(jobSizeDataCompleteness, 1);
-    Assert.assertEquals(taskSizeDataCompleteness, 2);
     JobDTO jobDTO = daoRegistry.getJobDAO().findAll().get(0);
     Assert.assertTrue(jobDTO.getJobName().startsWith(TaskType.DATA_COMPLETENESS.toString()));
+
+    // 2 tasks should be created (CHECKER & CLEANUP) - One task to fetch data and perform check, another for clean up
+    int taskSizeDataCompleteness = taskDAO.findAll().size();
+    Assert.assertEquals(taskSizeDataCompleteness, 2);
     List<TaskDTO> taskDTOs = taskDAO.findAll();
     for (TaskDTO taskDTO : taskDTOs) {
       Assert.assertEquals(taskDTO.getTaskType(), TaskType.DATA_COMPLETENESS);
@@ -224,18 +232,19 @@ public class AnomalyApplicationEndToEndTest {
     // check for number of entries in tasks and jobs
     Thread.sleep(1000);
     int jobSize1 = daoRegistry.getJobDAO().findAll().size();
-    int taskSize1 = taskDAO.findAll().size();
     Assert.assertTrue(jobSize1 > 0);
+    int taskSize1 = taskDAO.findAll().size();
     Assert.assertTrue(taskSize1 > 0);
+
     Thread.sleep(10000);
     int taskSize2 = taskDAO.findAll().size();
     Assert.assertTrue(taskSize2 > taskSize1);
 
-    tasks = taskDAO.findAll();
-
     // check for task type
     int detectionCount = 0;
     int subsCount = 0;
+    Thread.sleep(10000);
+    tasks = taskDAO.findAll();
     for (TaskDTO task : tasks) {
       if (task.getTaskType().equals(TaskType.DETECTION)) {
         detectionCount ++;
@@ -287,15 +296,12 @@ public class AnomalyApplicationEndToEndTest {
     Assert.assertTrue(completedCount > 0);
 
     // check merged anomalies
-    List<MergedAnomalyResultDTO> mergedAnomalies = daoRegistry.getMergedAnomalyResultDAO().findByFunctionId(functionId);
+    List<MergedAnomalyResultDTO> mergedAnomalies = anomalyDAO.findAll();
     Assert.assertTrue(mergedAnomalies.size() > 0);
-    AnomalyFunctionDTO functionSpec = daoRegistry.getAnomalyFunctionDAO().findById(functionId);
+    DetectionConfigDTO detectionConfigDTO = daoRegistry.getDetectionConfigManager().findById(functionId);
     for (MergedAnomalyResultDTO mergedAnomaly : mergedAnomalies) {
-      Assert.assertEquals(mergedAnomaly.getFunction(), functionSpec);
-      Assert.assertEquals(mergedAnomaly.getCollection(), functionSpec.getCollection());
-      Assert.assertEquals(mergedAnomaly.getMetric(), functionSpec.getTopicMetric());
+      Assert.assertEquals(mergedAnomaly.getDetectionConfigId(), detectionConfigDTO.getId());
       Assert.assertNotNull(mergedAnomaly.getAnomalyResultSource());
-      Assert.assertNotNull(mergedAnomaly.getDimensions());
       Assert.assertNotNull(mergedAnomaly.getProperties());
       Assert.assertNull(mergedAnomaly.getFeedback());
     }
@@ -317,15 +323,6 @@ public class AnomalyApplicationEndToEndTest {
       }
     }
     Assert.assertTrue(completedJobCount > 0);
-
-    // start classifier
-    startClassifier();
-    List<JobDTO> latestCompletedDetectionJobDTO =
-        daoRegistry.getJobDAO().findRecentScheduledJobByTypeAndConfigId(TaskType.ANOMALY_DETECTION, functionId, 0L);
-    Assert.assertNotNull(latestCompletedDetectionJobDTO);
-    Assert.assertEquals(latestCompletedDetectionJobDTO.get(0).getStatus(), JobStatus.COMPLETED);
-    Thread.sleep(5000);
-    jobs = daoRegistry.getJobDAO().findAll();
   }
 
   private void startDataCompletenessScheduler() throws Exception {
