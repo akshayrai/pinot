@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package org.apache.pinot.thirdeye.detection.cache.builder;
 
 import com.google.common.cache.CacheBuilder;
@@ -33,6 +52,8 @@ public class AnomaliesCacheBuilder {
   private static final Logger LOG = LoggerFactory.getLogger(AnomaliesCacheBuilder.class);
 
   private static final String PROP_DETECTION_CONFIG_ID = "detectionConfigId";
+
+  // Timeout to fetch anomalies from data source
   private static final long TIMEOUT = 60000;
   private static LoadingCache<AnomalySlice, Collection<MergedAnomalyResultDTO>> CACHE;
   private final ExecutorService executor = Executors.newCachedThreadPool();
@@ -46,21 +67,31 @@ public class AnomaliesCacheBuilder {
     this.anomalyDAO = DAORegistry.getInstance().getMergedAnomalyResultDAO();
   }
 
-  public static LoadingCache<AnomalySlice, Collection<MergedAnomalyResultDTO>> getInstance(boolean cacheEnabled) {
-    if (CACHE == null) {
-      AnomaliesCacheBuilder anomaliesCache = new AnomaliesCacheBuilder(cacheEnabled);
-      anomaliesCache.init();
-    }
-
+  private static LoadingCache<AnomalySlice, Collection<MergedAnomalyResultDTO>> createNewInstance(boolean cacheEnabled) {
+    AnomaliesCacheBuilder anomaliesCache = new AnomaliesCacheBuilder(cacheEnabled);
+    anomaliesCache.init();
     return CACHE;
   }
 
-  public static LoadingCache<AnomalySlice, Collection<MergedAnomalyResultDTO>> getInstance() {
-    if (CacheConfig.getInstance().useInMemoryCache()) {
-      return getInstance(true);
+  public static LoadingCache<AnomalySlice, Collection<MergedAnomalyResultDTO>> getInstance(boolean cacheEnabled) {
+    // Used for unit testing
+    if (!cacheEnabled) {
+      return createNewInstance(false);
     }
 
-    return getInstance(false);
+    return getInstance();
+  }
+
+  synchronized public static LoadingCache<AnomalySlice, Collection<MergedAnomalyResultDTO>> getInstance() {
+    if (CACHE != null) {
+      return CACHE;
+    }
+
+    if (CacheConfig.getInstance().useInMemoryCache()) {
+      return createNewInstance(true);
+    } else {
+      return createNewInstance(false);
+    }
   }
 
 
@@ -143,5 +174,11 @@ public class AnomaliesCacheBuilder {
     }
 
     return output;
+  }
+
+  public static void cleanCache() {
+    if (CACHE != null) {
+      CACHE.cleanUp();
+    }
   }
 }

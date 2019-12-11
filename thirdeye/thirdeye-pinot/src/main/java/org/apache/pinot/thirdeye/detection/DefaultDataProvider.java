@@ -156,6 +156,18 @@ public class DefaultDataProvider implements DataProvider {
       for (AnomalySlice slice : slices) {
         Collection<MergedAnomalyResultDTO> cacheResult = anomaliesCache.get(slice);
 
+/*        List<Predicate> predicates = DetectionUtils.buildPredicatesOnTime(slice.getStart(), slice.getEnd());
+        if (slice.getDetectionId() >= 0) {
+          predicates.add(Predicate.EQ("detectionConfigId", slice.getDetectionId()));
+        }
+        if (predicates.isEmpty()) {
+          throw new IllegalArgumentException("Must provide at least one of start, end, or " + "detectionConfigId");
+        }
+        Collection<MergedAnomalyResultDTO> anomalies = anomalyDAO.findByPredicate(DetectionUtils.AND(predicates));
+        anomalies.removeIf(anomaly -> !slice.match(anomaly));
+        LOG.info("Fetched {} anomalies for slice {}", anomalies.size(), slice);
+        output.putAll(slice, anomalies);*/
+
         // make a copy of the result so that cache won't be contaminated by client code
         List<MergedAnomalyResultDTO> clonedAnomalies = new ArrayList<>();
         for (MergedAnomalyResultDTO anomaly : cacheResult) {

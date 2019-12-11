@@ -57,6 +57,7 @@ import org.apache.pinot.thirdeye.detection.spi.model.AnomalySlice;
 import org.apache.pinot.thirdeye.detection.spi.model.EventSlice;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -162,11 +163,11 @@ public class DataProviderTest {
         ThirdEyeCacheRegistry.getInstance().getDatasetMaxDataTimeCache());
     // provider
     this.provider = new DefaultDataProvider(this.metricDAO, this.datasetDAO, this.eventDAO, this.anomalyDAO, this.evaluationDAO,
-        aggregationLoader, new DetectionPipelineLoader(), TimeSeriesCacheBuilder.getInstance(false), AnomaliesCacheBuilder
+        aggregationLoader, new DetectionPipelineLoader(), TimeSeriesCacheBuilder.getInstance(), AnomaliesCacheBuilder
         .getInstance(false));
   }
 
-  @AfterClass(alwaysRun = true)
+  @AfterMethod(alwaysRun = true)
   public void afterMethod() {
     this.testBase.cleanup();
   }

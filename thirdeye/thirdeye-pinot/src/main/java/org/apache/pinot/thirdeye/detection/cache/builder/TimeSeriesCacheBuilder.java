@@ -67,21 +67,22 @@ public class TimeSeriesCacheBuilder {
     this.cacheEnabled = cacheEnabled;
   }
 
-  public static LoadingCache<MetricSlice, DataFrame> getInstance(boolean cacheEnabled) {
-    if (CACHE == null) {
-      TimeSeriesCacheBuilder timeSeriesCache = new TimeSeriesCacheBuilder(cacheEnabled);
-      timeSeriesCache.init();
-    }
-
+  private static LoadingCache<MetricSlice, DataFrame> getInstance(boolean cacheEnabled) {
+    TimeSeriesCacheBuilder timeSeriesCache = new TimeSeriesCacheBuilder(cacheEnabled);
+    timeSeriesCache.init();
     return CACHE;
   }
 
-  public static LoadingCache<MetricSlice, DataFrame> getInstance() {
-    if (CacheConfig.getInstance().useInMemoryCache()) {
-      return getInstance(true);
+  synchronized public static LoadingCache<MetricSlice, DataFrame> getInstance() {
+    if (CACHE != null) {
+      return CACHE;
     }
 
-    return getInstance(false);
+    if (CacheConfig.getInstance().useInMemoryCache()) {
+      return getInstance(true);
+    } else {
+      return getInstance(false);
+    }
   }
 
   private void init() {
