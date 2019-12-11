@@ -28,15 +28,13 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.apache.pinot.thirdeye.dataframe.DataFrame;
 import org.apache.pinot.thirdeye.dataframe.util.MetricSlice;
-import org.apache.pinot.thirdeye.datasource.DAORegistry;
-import org.apache.pinot.thirdeye.datasource.ThirdEyeCacheRegistry;
-import org.apache.pinot.thirdeye.datasource.loader.DefaultTimeSeriesLoader;
 import org.apache.pinot.thirdeye.datasource.loader.TimeSeriesLoader;
 import org.apache.pinot.thirdeye.detection.DetectionUtils;
 import org.apache.pinot.thirdeye.detection.cache.CacheConfig;
@@ -53,43 +51,32 @@ import static org.apache.pinot.thirdeye.dataframe.util.DataFrameUtils.*;
 public class TimeSeriesCacheBuilder {
   private static final Logger LOG = LoggerFactory.getLogger(TimeSeriesCacheBuilder.class);
 
-  private static LoadingCache<MetricSlice, DataFrame> CACHE;
   private static final long TIMEOUT = 60000;
 
   private final ExecutorService executor = Executors.newCachedThreadPool();
-  private final TimeSeriesLoader timeseriesLoader =
-      new DefaultTimeSeriesLoader(DAORegistry.getInstance().getMetricConfigDAO(), DAORegistry.getInstance().getDatasetConfigDAO(),
-          ThirdEyeCacheRegistry.getInstance().getQueryCache(), ThirdEyeCacheRegistry.getInstance().getTimeSeriesCache());
+  private final TimeSeriesLoader timeseriesLoader;
+  private final LoadingCache<MetricSlice, DataFrame> cache;
 
-  private boolean cacheEnabled;
+  private static TimeSeriesCacheBuilder INSTANCE;
 
-  private TimeSeriesCacheBuilder(boolean cacheEnabled) {
-    this.cacheEnabled = cacheEnabled;
+  private TimeSeriesCacheBuilder(TimeSeriesLoader timeseriesLoader) {
+    this.timeseriesLoader = timeseriesLoader;
+    this.cache = initCache();
   }
 
-  private static LoadingCache<MetricSlice, DataFrame> getInstance(boolean cacheEnabled) {
-    TimeSeriesCacheBuilder timeSeriesCache = new TimeSeriesCacheBuilder(cacheEnabled);
-    timeSeriesCache.init();
-    return CACHE;
-  }
-
-  synchronized public static LoadingCache<MetricSlice, DataFrame> getInstance() {
-    if (CACHE != null) {
-      return CACHE;
+  synchronized public static TimeSeriesCacheBuilder getInstance(TimeSeriesLoader timeseriesLoader) {
+    if (INSTANCE == null) {
+      INSTANCE = new TimeSeriesCacheBuilder(timeseriesLoader);
     }
 
-    if (CacheConfig.getInstance().useInMemoryCache()) {
-      return getInstance(true);
-    } else {
-      return getInstance(false);
-    }
+    return INSTANCE;
   }
 
-  private void init() {
+  private LoadingCache<MetricSlice, DataFrame> initCache() {
     // don't use more than one third of memory for detection time series
     long cacheSize = Runtime.getRuntime().freeMemory() / 3;
     LOG.info("initializing detection timeseries cache with {} bytes", cacheSize);
-    CACHE = CacheBuilder.newBuilder()
+    return CacheBuilder.newBuilder()
         .maximumWeight(cacheSize)
         // Estimate that most detection tasks will complete within 15 minutes
         .expireAfterWrite(15, TimeUnit.MINUTES)
@@ -109,6 +96,14 @@ public class TimeSeriesCacheBuilder {
         });
   }
 
+  public Map<MetricSlice, DataFrame> fetchSlices(Collection<MetricSlice> slices) throws ExecutionException {
+    if (CacheConfig.getInstance().useInMemoryCache()) {
+      return this.cache.getAll(slices);
+    } else {
+      return loadTimeseries(slices);
+    }
+  }
+
   /**
    * Loads time-series data for the given slices. Fetch order:
    * a. Check if the time-series is already available in the cache and return
@@ -121,9 +116,9 @@ public class TimeSeriesCacheBuilder {
       long ts = System.currentTimeMillis();
 
       // if the time series slice is already in cache, return directly
-      if (cacheEnabled) {
+      if (CacheConfig.getInstance().useInMemoryCache()) {
         for (MetricSlice slice : slices) {
-          for (Map.Entry<MetricSlice, DataFrame> entry : CACHE.asMap().entrySet()) {
+          for (Map.Entry<MetricSlice, DataFrame> entry : this.cache.asMap().entrySet()) {
             // current slice potentially contained in cache
             if (entry.getKey().containSlice(slice)) {
               DataFrame df = entry.getValue()

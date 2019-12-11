@@ -19,7 +19,6 @@
 
 package org.apache.pinot.thirdeye.detection;
 
-import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 import java.util.ArrayList;
@@ -52,6 +51,7 @@ import org.apache.pinot.thirdeye.datalayer.dto.MergedAnomalyResultDTO;
 import org.apache.pinot.thirdeye.datalayer.dto.MetricConfigDTO;
 import org.apache.pinot.thirdeye.datalayer.util.Predicate;
 import org.apache.pinot.thirdeye.datasource.loader.AggregationLoader;
+import org.apache.pinot.thirdeye.datasource.loader.TimeSeriesLoader;
 import org.apache.pinot.thirdeye.detection.cache.builder.AnomaliesCacheBuilder;
 import org.apache.pinot.thirdeye.detection.cache.builder.TimeSeriesCacheBuilder;
 import org.apache.pinot.thirdeye.detection.spi.model.AnomalySlice;
@@ -74,28 +74,30 @@ public class DefaultDataProvider implements DataProvider {
   private final EventManager eventDAO;
   private final MergedAnomalyResultManager anomalyDAO;
   private final EvaluationManager evaluationDAO;
+  private final TimeSeriesLoader timeseriesLoader;
   private final AggregationLoader aggregationLoader;
   private final DetectionPipelineLoader loader;
 
-  private final LoadingCache<MetricSlice, DataFrame> timeseriesCache;
-  private final LoadingCache<AnomalySlice, Collection<MergedAnomalyResultDTO>> anomaliesCache;
+  private final TimeSeriesCacheBuilder timeseriesCache;
+  private final AnomaliesCacheBuilder anomaliesCache;
 
   public DefaultDataProvider(MetricConfigManager metricDAO, DatasetConfigManager datasetDAO, EventManager eventDAO,
-      MergedAnomalyResultManager anomalyDAO, EvaluationManager evaluationDAO, AggregationLoader aggregationLoader,
-      DetectionPipelineLoader loader) {
-    this(metricDAO, datasetDAO, eventDAO, anomalyDAO, evaluationDAO, aggregationLoader, loader,
-        TimeSeriesCacheBuilder.getInstance(), AnomaliesCacheBuilder.getInstance());
+      MergedAnomalyResultManager anomalyDAO, EvaluationManager evaluationDAO, TimeSeriesLoader timeseriesLoader,
+      AggregationLoader aggregationLoader, DetectionPipelineLoader loader) {
+    this(metricDAO, datasetDAO, eventDAO, anomalyDAO, evaluationDAO, timeseriesLoader, aggregationLoader, loader,
+        TimeSeriesCacheBuilder.getInstance(timeseriesLoader), AnomaliesCacheBuilder.getInstance(anomalyDAO));
   }
 
-  public DefaultDataProvider(MetricConfigManager metricDAO, DatasetConfigManager datasetDAO, EventManager eventDAO,
-      MergedAnomalyResultManager anomalyDAO, EvaluationManager evaluationDAO, AggregationLoader aggregationLoader,
-      DetectionPipelineLoader loader, LoadingCache<MetricSlice, DataFrame> timeseriesCache,
-      LoadingCache<AnomalySlice, Collection<MergedAnomalyResultDTO>> anomaliesCache) {
+  private DefaultDataProvider(MetricConfigManager metricDAO, DatasetConfigManager datasetDAO, EventManager eventDAO,
+      MergedAnomalyResultManager anomalyDAO, EvaluationManager evaluationDAO, TimeSeriesLoader timeseriesLoader,
+      AggregationLoader aggregationLoader, DetectionPipelineLoader loader, TimeSeriesCacheBuilder timeseriesCache,
+      AnomaliesCacheBuilder anomaliesCache) {
     this.metricDAO = metricDAO;
     this.datasetDAO = datasetDAO;
     this.eventDAO = eventDAO;
     this.anomalyDAO = anomalyDAO;
     this.evaluationDAO = evaluationDAO;
+    this.timeseriesLoader = timeseriesLoader;
     this.aggregationLoader = aggregationLoader;
     this.loader = loader;
     this.timeseriesCache = timeseriesCache;
@@ -109,7 +111,7 @@ public class DefaultDataProvider implements DataProvider {
       for (MetricSlice slice: slices) {
         alignedMetricSlicesToOriginalSlice.put(alignSlice(slice), slice);
       }
-      Map<MetricSlice, DataFrame> cacheResult = timeseriesCache.getAll(alignedMetricSlicesToOriginalSlice.keySet());
+      Map<MetricSlice, DataFrame> cacheResult = timeseriesCache.fetchSlices(alignedMetricSlicesToOriginalSlice.keySet());
       Map<MetricSlice, DataFrame> timeseriesResult = new HashMap<>();
       for (Map.Entry<MetricSlice, DataFrame> entry : cacheResult.entrySet()) {
         // make a copy of the result so that cache won't be contaminated by client code
@@ -154,19 +156,7 @@ public class DefaultDataProvider implements DataProvider {
     Multimap<AnomalySlice, MergedAnomalyResultDTO> output = ArrayListMultimap.create();
     try {
       for (AnomalySlice slice : slices) {
-        Collection<MergedAnomalyResultDTO> cacheResult = anomaliesCache.get(slice);
-
-/*        List<Predicate> predicates = DetectionUtils.buildPredicatesOnTime(slice.getStart(), slice.getEnd());
-        if (slice.getDetectionId() >= 0) {
-          predicates.add(Predicate.EQ("detectionConfigId", slice.getDetectionId()));
-        }
-        if (predicates.isEmpty()) {
-          throw new IllegalArgumentException("Must provide at least one of start, end, or " + "detectionConfigId");
-        }
-        Collection<MergedAnomalyResultDTO> anomalies = anomalyDAO.findByPredicate(DetectionUtils.AND(predicates));
-        anomalies.removeIf(anomaly -> !slice.match(anomaly));
-        LOG.info("Fetched {} anomalies for slice {}", anomalies.size(), slice);
-        output.putAll(slice, anomalies);*/
+        Collection<MergedAnomalyResultDTO> cacheResult = anomaliesCache.fetchSlice(slice);
 
         // make a copy of the result so that cache won't be contaminated by client code
         List<MergedAnomalyResultDTO> clonedAnomalies = new ArrayList<>();

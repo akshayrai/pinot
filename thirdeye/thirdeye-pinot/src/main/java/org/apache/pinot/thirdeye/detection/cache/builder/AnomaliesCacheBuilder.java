@@ -29,6 +29,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -36,7 +37,6 @@ import java.util.concurrent.TimeUnit;
 import org.apache.pinot.thirdeye.datalayer.bao.MergedAnomalyResultManager;
 import org.apache.pinot.thirdeye.datalayer.dto.MergedAnomalyResultDTO;
 import org.apache.pinot.thirdeye.datalayer.util.Predicate;
-import org.apache.pinot.thirdeye.datasource.DAORegistry;
 import org.apache.pinot.thirdeye.detection.DetectionUtils;
 import org.apache.pinot.thirdeye.detection.cache.CacheConfig;
 import org.apache.pinot.thirdeye.detection.spi.model.AnomalySlice;
@@ -52,52 +52,31 @@ public class AnomaliesCacheBuilder {
   private static final Logger LOG = LoggerFactory.getLogger(AnomaliesCacheBuilder.class);
 
   private static final String PROP_DETECTION_CONFIG_ID = "detectionConfigId";
-
   // Timeout to fetch anomalies from data source
   private static final long TIMEOUT = 60000;
-  private static LoadingCache<AnomalySlice, Collection<MergedAnomalyResultDTO>> CACHE;
+
+  private final LoadingCache<AnomalySlice, Collection<MergedAnomalyResultDTO>> cache;
   private final ExecutorService executor = Executors.newCachedThreadPool();
 
+  private static AnomaliesCacheBuilder INSTANCE;
   private MergedAnomalyResultManager anomalyDAO;
 
-  private boolean cacheEnabled;
-
-  private AnomaliesCacheBuilder(boolean enabled) {
-    this.cacheEnabled = enabled;
-    this.anomalyDAO = DAORegistry.getInstance().getMergedAnomalyResultDAO();
+  private AnomaliesCacheBuilder(MergedAnomalyResultManager anomalyDAO) {
+    this.anomalyDAO = anomalyDAO;
+    this.cache = initCache();
   }
 
-  private static LoadingCache<AnomalySlice, Collection<MergedAnomalyResultDTO>> createNewInstance(boolean cacheEnabled) {
-    AnomaliesCacheBuilder anomaliesCache = new AnomaliesCacheBuilder(cacheEnabled);
-    anomaliesCache.init();
-    return CACHE;
-  }
-
-  public static LoadingCache<AnomalySlice, Collection<MergedAnomalyResultDTO>> getInstance(boolean cacheEnabled) {
-    // Used for unit testing
-    if (!cacheEnabled) {
-      return createNewInstance(false);
+  synchronized public static AnomaliesCacheBuilder getInstance(MergedAnomalyResultManager anomalyDAO) {
+    if (INSTANCE == null) {
+      INSTANCE = new AnomaliesCacheBuilder(anomalyDAO);
     }
 
-    return getInstance();
+    return INSTANCE;
   }
 
-  synchronized public static LoadingCache<AnomalySlice, Collection<MergedAnomalyResultDTO>> getInstance() {
-    if (CACHE != null) {
-      return CACHE;
-    }
-
-    if (CacheConfig.getInstance().useInMemoryCache()) {
-      return createNewInstance(true);
-    } else {
-      return createNewInstance(false);
-    }
-  }
-
-
-  private void init() {
+  private LoadingCache<AnomalySlice, Collection<MergedAnomalyResultDTO>> initCache() {
     LOG.info("Initializing anomalies cache");
-    CACHE = CacheBuilder.newBuilder()
+    return CacheBuilder.newBuilder()
         .expireAfterAccess(10, TimeUnit.MINUTES)
         .maximumSize(10000)
         .build(new CacheLoader<AnomalySlice, Collection<MergedAnomalyResultDTO>>() {
@@ -113,15 +92,23 @@ public class AnomaliesCacheBuilder {
         });
   }
 
+  public Collection<MergedAnomalyResultDTO> fetchSlice(AnomalySlice slice) throws ExecutionException {
+    if (CacheConfig.getInstance().useInMemoryCache()) {
+      return this.cache.get(slice);
+    } else {
+      return loadAnomalies(Collections.singleton(slice)).get(slice);
+    }
+  }
+
   private Map<AnomalySlice, Collection<MergedAnomalyResultDTO>> loadAnomalies(Collection<AnomalySlice> slices) {
     Map<AnomalySlice, Collection<MergedAnomalyResultDTO>> output = new HashMap<>();
     try {
       long ts = System.currentTimeMillis();
 
       // if the anomalies are already in cache, return directly
-      if (cacheEnabled) {
+      if (CacheConfig.getInstance().useInMemoryCache()) {
         for (AnomalySlice slice : slices) {
-          for (Map.Entry<AnomalySlice, Collection<MergedAnomalyResultDTO>> entry : CACHE.asMap().entrySet()) {
+          for (Map.Entry<AnomalySlice, Collection<MergedAnomalyResultDTO>> entry : this.cache.asMap().entrySet()) {
             // if the anomaly slice is already in cache, return directly. Otherwise fetch from data source.
             if (entry.getKey().containSlice(slice)) {
               output.computeIfAbsent(slice, k -> new ArrayList<>());
@@ -174,11 +161,5 @@ public class AnomaliesCacheBuilder {
     }
 
     return output;
-  }
-
-  public static void cleanCache() {
-    if (CACHE != null) {
-      CACHE.cleanUp();
-    }
   }
 }

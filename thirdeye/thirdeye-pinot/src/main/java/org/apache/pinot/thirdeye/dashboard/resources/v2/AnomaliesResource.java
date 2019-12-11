@@ -30,7 +30,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -190,7 +189,7 @@ public class AnomaliesResource {
     this.loader = new DetectionPipelineLoader();
 
     this.provider = new DefaultDataProvider(this.metricConfigDAO, this.datasetConfigDAO, this.eventDAO, this.anomalyDAO, this.evaluationDAO,
-        this.aggregationLoader, this.loader);
+        this.timeSeriesLoader, this.aggregationLoader, this.loader);
   }
 
   @GET
