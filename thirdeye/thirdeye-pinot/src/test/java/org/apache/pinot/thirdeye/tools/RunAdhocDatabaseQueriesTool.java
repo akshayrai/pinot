@@ -16,8 +16,11 @@
 
 package org.apache.pinot.thirdeye.tools;
 
+import com.google.common.collect.Collections2;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 import org.apache.pinot.thirdeye.anomaly.task.TaskConstants;
 import org.apache.pinot.thirdeye.constant.AnomalyResultSource;
 import org.apache.pinot.thirdeye.datalayer.bao.AlertConfigManager;
@@ -51,6 +54,7 @@ import org.apache.pinot.thirdeye.datalayer.bao.jdbc.MetricConfigManagerImpl;
 import org.apache.pinot.thirdeye.datalayer.bao.jdbc.OverrideConfigManagerImpl;
 import org.apache.pinot.thirdeye.datalayer.bao.jdbc.RawAnomalyResultManagerImpl;
 import org.apache.pinot.thirdeye.datalayer.bao.jdbc.TaskManagerImpl;
+import org.apache.pinot.thirdeye.datalayer.dto.AbstractDTO;
 import org.apache.pinot.thirdeye.datalayer.dto.AlertConfigDTO;
 import org.apache.pinot.thirdeye.datalayer.dto.AnomalyFeedbackDTO;
 import org.apache.pinot.thirdeye.datalayer.dto.AnomalyFunctionDTO;
@@ -81,6 +85,7 @@ import java.util.Map;
 
 import java.util.Set;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.pinot.thirdeye.detection.alert.AlertUtils;
 import org.apache.pinot.thirdeye.detection.alert.DetectionAlertFilterRecipients;
 import org.jfree.util.Log;
 import org.slf4j.Logger;
@@ -627,24 +632,43 @@ public class RunAdhocDatabaseQueriesTool {
    */
   private void migrateSubscriptionWatermarks() {
     List<DetectionAlertConfigDTO> subscriptions = detectionAlertConfigDAO.findAll();
+    List<Long> detections = detectionConfigDAO.findAll().stream().map(AbstractDTO::getId).collect(Collectors.toList());
+
+    // Fetch all root (non-child) anomalies in the last 2 weeks
+    long lookback = TimeUnit.DAYS.toMillis(14);
+    long current = System.currentTimeMillis();
+    Predicate predicate = Predicate.AND(
+        Predicate.LE("endTime", current),
+        Predicate.GT("endTime", current - lookback));
+    List<MergedAnomalyResultDTO> allAnomaliesTemp = mergedResultDAO.findByPredicate(predicate);
+    Collection<MergedAnomalyResultDTO> allAnomalies =
+        Collections2.filter(allAnomaliesTemp, mergedAnomalyResultDTO -> !mergedAnomalyResultDTO.isChild());
+
     for (DetectionAlertConfigDTO subscription : subscriptions) {
+      if (!subscription.isActive()) {
+        LOG.info("Skipping subscription group. Because it is Inactive! " + subscription.getId());
+        continue;
+      }
+
       Map<Long, Long> updatedVectorClocks = new HashMap<>();
       Map<Long, Long> vectorClocks = subscription.getVectorClocks();
       if (vectorClocks != null && vectorClocks.size() != 0) {
         for (Map.Entry<Long, Long> clockEntry : vectorClocks.entrySet()) {
-          DetectionConfigDTO detectionConfigDTO = detectionConfigDAO.findById(clockEntry.getKey());
-          if (detectionConfigDTO == null) {
-            // skip the detection; doesn't exist
+          if (!detections.contains(clockEntry.getKey())) {
+            LOG.info("detection doesn't exist");
             continue;
           }
 
-          // find all recent anomalies (last 14 days) with end time <= watermark;
-          long lookback = TimeUnit.DAYS.toMillis(14);
-          Predicate predicate = Predicate.AND(
-              Predicate.LE("endTime", clockEntry.getValue()),
-              Predicate.GT("endTime", clockEntry.getValue() - lookback),
-              Predicate.EQ("detectionConfigId", detectionConfigDTO.getId()));
-          List<MergedAnomalyResultDTO> anomalies = mergedResultDAO.findByPredicate(predicate);
+          List<MergedAnomalyResultDTO> anomalies = new ArrayList<>();
+          // We can ignore those anomalies which are older than lookback. We do not notify them.
+          if (clockEntry.getValue() > System.currentTimeMillis() - lookback) {
+            // Filter out all the anomalies belonging to detection
+            for (MergedAnomalyResultDTO anomaly : allAnomalies) {
+              if (anomaly.getDetectionConfigId().longValue() == clockEntry.getKey()) {
+                anomalies.add(anomaly);
+              }
+            }
+          }
 
           // find the max create time among anomalies
           long createTimeMax = 0;
@@ -654,10 +678,12 @@ public class RunAdhocDatabaseQueriesTool {
 
           // update the watermark
           if (createTimeMax > 0) {
+            if (createTimeMax != clockEntry.getValue()) {
+              LOG.info("Updated watermark from " + clockEntry.getValue() + " to " + createTimeMax);
+            }
             updatedVectorClocks.put(clockEntry.getKey(), createTimeMax);
           } else {
-            // If there are no anomalies or the anomaly create time is not available, then we will leave
-            // it as the original watermark.
+            // If there are no anomalies or the anomaly create time is not available, then we will retain.
             updatedVectorClocks.put(clockEntry.getKey(), clockEntry.getValue());
           }
         }
@@ -678,25 +704,40 @@ public class RunAdhocDatabaseQueriesTool {
    */
   private void rollbackMigrateSubscriptionWatermarks() {
     List<DetectionAlertConfigDTO> subscriptions = detectionAlertConfigDAO.findAll();
+    List<Long> detections = detectionConfigDAO.findAll().stream().map(AbstractDTO::getId).collect(Collectors.toList());
+
+    long lookback = TimeUnit.DAYS.toMillis(14);
+    long current = System.currentTimeMillis();
+    Predicate predicate = Predicate.AND(
+        Predicate.LE("endTime", current),
+        Predicate.GT("endTime", current - lookback));
+    List<MergedAnomalyResultDTO> allAnomaliesTemp = mergedResultDAO.findByPredicate(predicate);
+    Collection<MergedAnomalyResultDTO> allAnomalies =
+        Collections2.filter(allAnomaliesTemp, mergedAnomalyResultDTO -> !mergedAnomalyResultDTO.isChild());
 
     for (DetectionAlertConfigDTO subscription : subscriptions) {
+      if (!subscription.isActive()) {
+        continue;
+      }
+
       Map<Long, Long> updatedVectorClocks = new HashMap<>();
       Map<Long, Long> vectorClocks = subscription.getVectorClocks();
       if (vectorClocks != null && vectorClocks.size() != 0) {
         for (Map.Entry<Long, Long> clockEntry : vectorClocks.entrySet()) {
-          DetectionConfigDTO detectionConfigDTO = detectionConfigDAO.findById(clockEntry.getKey());
-          if (detectionConfigDTO == null) {
+          if (!detections.contains(clockEntry.getKey())) {
             // skip the detection; doesn't exist
             continue;
           }
 
-          // find all recent anomalies (last 14 days) with end time <= watermark;
-          long lookback = TimeUnit.DAYS.toMillis(14);
-          Predicate predicate = Predicate.AND(
-              Predicate.LE("createTime", clockEntry.getValue()),
-              Predicate.GT("createTime", clockEntry.getValue() - lookback),
-              Predicate.EQ("detectionConfigId", detectionConfigDTO.getId()));
-          List<MergedAnomalyResultDTO> anomalies = mergedResultDAO.findByPredicate(predicate);
+          List<MergedAnomalyResultDTO> anomalies = new ArrayList<>();
+          // We can ignore those anomalies which are older than lookback
+          if (clockEntry.getValue() > System.currentTimeMillis() - lookback) {
+            for (MergedAnomalyResultDTO anomaly : allAnomalies) {
+              if (anomaly.getDetectionConfigId().longValue() == clockEntry.getKey()) {
+                anomalies.add(anomaly);
+              }
+            }
+          }
 
           // find the max create time
           long endTime = 0;
@@ -724,11 +765,11 @@ public class RunAdhocDatabaseQueriesTool {
   }
 
   public static void main(String[] args) throws Exception {
-
     File persistenceFile = new File(args[0]);
     if (!persistenceFile.exists()) {
       System.err.println("Missing file:" + persistenceFile);
       System.exit(1);
+
     }
     RunAdhocDatabaseQueriesTool dq = new RunAdhocDatabaseQueriesTool(persistenceFile);
     dq.disableAllActiveDetections(Collections.singleton(142644400L));
